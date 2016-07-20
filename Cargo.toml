@@ -1,0 +1,12 @@
+[package]
+name = "libtabun"
+version = "0.1.0"
+authors = ["TyanNN <tyannn@cocaine.ninja>"]
+
+[dependencies]
+hyper		= "*"
+multipart	= "*"
+select		= "*"
+regex		= "*"
+cookie		= "*"
+time		= "*"
