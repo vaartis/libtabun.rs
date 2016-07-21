@@ -10,6 +10,7 @@ use regex::Regex;
 
 use hyper::Client;
 use hyper::header::{SetCookie,Cookie};
+use hyper::status::StatusCode;
 
 use std::io::Read;
 
@@ -17,6 +18,13 @@ use select::document::Document;
 use select::predicate::{Class, Name, And};
 
 use cookie::CookieJar;
+
+#[derive(Debug)]
+pub enum TabunError {
+    HackingAttempt,
+    Error(String,String),
+    NumError(StatusCode)
+}
 
 pub struct TClient<'a> {
     pub name:               String,
@@ -42,16 +50,64 @@ impl Display for Comment {
 }
 
 impl<'a> TClient<'a> {
-    pub fn new() -> TClient<'a> {
-        TClient{
-            name:               "".to_owned(),
-            security_ls_key:    "".to_owned(),
-            client:             Client::new(),
-            cookies:            CookieJar::new(&*time::now().to_timespec().sec.to_string().as_bytes()),
+
+    ///Входит на табунчик и сохраняет LIVESTREET_SECURITY_KEY,
+    ///если логин или пароль == "" - анонимус.
+    pub fn new(login: &str, pass: &str) -> Result<TClient<'a>,TabunError> {
+        if login == "" || pass == "" {
+            return Ok(TClient{
+                name:               "".to_owned(),
+                security_ls_key:    "".to_owned(),
+                client:             Client::new(),
+                cookies:            CookieJar::new(&*time::now().to_timespec().sec.to_string().as_bytes()),
+            });
+        }
+
+        let mut user = TClient::new("","").unwrap();
+
+        let err_regex = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"").unwrap();
+        let hacking_regex = Regex::new("Hacking").unwrap();
+
+        let ls_key_regex = Regex::new(r"LIVESTREET_SECURITY_KEY = '(.+)'").unwrap();
+
+        let page = match user.get(&"/login".to_owned()) {
+            Ok(x) => x,
+            Err(x) => return Err(TabunError::NumError(x))
+        };
+
+        let page_html = page.find(Name("html")).first().unwrap().html();
+
+        user.security_ls_key = ls_key_regex.captures(&*page_html).unwrap().at(1).unwrap().to_owned();
+
+        let added_url = "/login/ajax-login?login=".to_owned() + login +
+            "&password=" + pass + "&security_ls_key=" + user.security_ls_key.as_str();
+
+        let res = match user.get(&added_url) {
+            Ok(x) => x.nth(0).unwrap().text(),
+            Err(x) => return Err(TabunError::NumError(x))
+        };
+
+        let res = res.as_str();
+
+
+        if hacking_regex.is_match(res) {
+            Err(TabunError::HackingAttempt)
+        } else if err_regex.is_match(res) {
+            let err = err_regex.captures(res).unwrap();
+            Err(TabunError::Error(err.at(1).unwrap().to_owned(),err.at(2).unwrap().to_owned())) 
+        } else {
+            let page = match user.get(&"".to_owned()) {
+                Ok(x) => x,
+                Err(x) => return Err(TabunError::NumError(x))
+            };
+
+            user.name = page.find(Class("username")).first().unwrap().text();
+
+            Ok(user)
         }
     }
     
-    fn get(&mut self,url: &String) -> Document{
+    fn get(&mut self,url: &String) -> Result<Document,StatusCode>{
         let full_url = "https://tabun.everypony.ru".to_owned() + &url;
 
         let mut res = self.client.get(
@@ -60,7 +116,7 @@ impl<'a> TClient<'a> {
             .send()
             .unwrap();
 
-        assert_eq!(res.status,hyper::Ok);
+        if res.status != hyper::Ok { return Err(res.status) }
 
         let mut buf = String::new();
         res.read_to_string(&mut buf).unwrap();
@@ -76,52 +132,48 @@ impl<'a> TClient<'a> {
             Some(_) => cookie.unwrap().apply_to_cookie_jar(&mut self.cookies),
         }
 
-        Document::from(&*buf)
-    }
-
-    ///Входит на табунчик и сохраняет LIVESTREET_SECURITY_KEY
-    pub fn login(&mut self,login: &str, pass: &str) {
-        let ls_key_regex = Regex::new(r"LIVESTREET_SECURITY_KEY = '(.+)'").unwrap();
-        let page = self.get(&"/login".to_owned());
-
-        let page_html = page.find(Name("html")).first().unwrap().html();
-
-        self.security_ls_key = ls_key_regex.captures(&*page_html).unwrap().at(1).unwrap().to_owned();
-
-        let added_url = "/login/ajax-login?login=".to_owned() + login +
-            "&password=" + pass + "&security_ls_key=" + self.security_ls_key.as_str();
-        
-        self.get(&added_url);
-
-        let page = self.get(&"".to_owned());
-
-        self.name = page.find(Class("username")).first().unwrap().text();
+        Ok(Document::from(&*buf))
     }
 
     ///Оставить коммент к какому-нибудь посту, reply=0 - ответ на сам пост,
     ///иначе на чей-то коммент
-    pub fn comment(&mut self,post_id: i32, body : &str, reply: i32) -> i32{
+    pub fn comment(&mut self,post_id: i32, body : &str, reply: i32) -> Result<i64,TabunError>{
         let id_regex = Regex::new("\"sCommentId\":(\\d+)").unwrap();
+        let err_regex = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"").unwrap();
+
         let url = "/blog/ajaxaddcomment?security_ls_key=".to_owned() + self.security_ls_key.as_str() +
             "&cmt_target_id=" + post_id.to_string().as_str() + "&reply=" + reply.to_string().as_str() +
             "&comment_text=" + body;
 
-        id_regex.captures(&self.get(&url)
-                          .nth(0)
-                          .unwrap()
-                          .text())
+        let res = match self.get(&url) {
+            Ok(x) => x.nth(0).unwrap().text(),
+            Err(x) => return Err(TabunError::NumError(x))
+        };
+
+        let res = res.as_str();
+
+        if err_regex.is_match(res) {
+            let err = err_regex.captures(res).unwrap();
+            return Err(TabunError::Error(err.at(1).unwrap().to_owned(),err.at(2).unwrap().to_owned()));
+        }
+
+        Ok(id_regex.captures(res)
             .unwrap()
             .at(1)
             .unwrap()
-            .parse::<i32>().unwrap()
+            .parse::<i64>().unwrap())
     }
 
     ///Получить комменты из некоторого поста
-    pub fn get_comments(&mut self,blog: &str, post_id: i32) -> Vec<Comment> {
+    pub fn get_comments(&mut self,blog: &str, post_id: i32) -> Result<Vec<Comment>,TabunError> {
         let mut ret = Vec::with_capacity(0);
 
         let url = "/blog/".to_owned() + blog + "/".to_owned().as_str() + post_id.to_string().as_str() + ".html".to_string().as_str();
-        let page = self.get(&url);
+        let page = match self.get(&url) {
+            Ok(x) => x,
+            Err(x)  => return Err(TabunError::NumError(x)),
+        };
+
         let comments = page.find(And(Name("div"),Class("comments")));
         for wrapper in comments.find(And(Name("div"),Class("comment-wrapper"))).iter() {
             let mut parent = 0;
@@ -158,7 +210,19 @@ impl<'a> TClient<'a> {
                 })
             }
         }
-        return ret;
+        return Ok(ret);
+    }
+
+    pub fn get_blog_id(&mut self,name: &str) -> i32 {
+        let url = "/blog/".to_owned() + name;
+        self.get(&url).unwrap().find(And(Name("div"),Class("vote-item")))
+            .first().unwrap()
+            .find(Name("span"))
+            .first().unwrap()
+            .attr("id").unwrap()
+            .split("_").collect::<Vec<&str>>()
+            .last().unwrap()
+            .parse::<i32>().unwrap()
     }
 }
 
