@@ -21,11 +21,18 @@ use cookie::CookieJar;
 
 #[derive(Debug)]
 pub enum TabunError {
+    ///На случай `Hacking attempt!`
     HackingAttempt,
+    ///Ошибка с названием и описанием,
+    ///обычно соответствует табуновским
+    ///всплывающим сообщениям
+    ///TODO: сделать их читаемыми
     Error(String,String),
+    ///Ошибка с номером, вроде 404 и 403
     NumError(StatusCode)
 }
 
+///Клиент табуна
 pub struct TClient<'a> {
     pub name:               String,
     pub security_ls_key:    String,
@@ -53,6 +60,15 @@ impl<'a> TClient<'a> {
 
     ///Входит на табунчик и сохраняет LIVESTREET_SECURITY_KEY,
     ///если логин или пароль == "" - анонимус.
+    ///
+    ///# Examples
+    ///```
+    ///let mut user = TClient.new("логин","пароль")
+    ///```
+    ///
+    ///# Errors
+    ///Если войти не удалось, то возвращает `TabunError::Error`
+    ///с описание ошибки
     pub fn new(login: &str, pass: &str) -> Result<TClient<'a>,TabunError> {
         if login == "" || pass == "" {
             return Ok(TClient{
@@ -137,6 +153,16 @@ impl<'a> TClient<'a> {
 
     ///Оставить коммент к какому-нибудь посту, reply=0 - ответ на сам пост,
     ///иначе на чей-то коммент
+    ///
+    ///# Examples
+    ///```rust,no_run
+    ///# let mut user = TClient.new("логин","пароль");
+    ///user.comment(1234,"Привет!",0)
+    ///```
+    ///
+    ///# Errors
+    ///Может возвращать `TabunError::NumError`, если
+    ///поста не существует
     pub fn comment(&mut self,post_id: i32, body : &str, reply: i32) -> Result<i64,TabunError>{
         let id_regex = Regex::new("\"sCommentId\":(\\d+)").unwrap();
         let err_regex = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"").unwrap();
@@ -165,6 +191,16 @@ impl<'a> TClient<'a> {
     }
 
     ///Получить комменты из некоторого поста
+    ///
+    ///# Examples
+    ///```
+    ///# let mut user = TClient.new("логин","пароль");
+    ///user.get_comments("lighthouse",157807)
+    ///```
+    ///
+    ///# Errors
+    ///Может возвращать `TabunError::NumError`, если
+    ///поста не существует
     pub fn get_comments(&mut self,blog: &str, post_id: i32) -> Result<Vec<Comment>,TabunError> {
         let mut ret = Vec::with_capacity(0);
 
@@ -213,16 +249,32 @@ impl<'a> TClient<'a> {
         return Ok(ret);
     }
 
-    pub fn get_blog_id(&mut self,name: &str) -> i32 {
+    ///Получает ID блога по его имени
+    ///
+    ///# Examples
+    ///```
+    ///# let mut user = TClient.new("логин","пароль");
+    ///let blog_id = user.get_blog_id("lighthouse").unwrap();
+    ///assert_eq!(blog_id,15558)
+    ///```
+    ///
+    ///# Errors
+    ///Возвращает `TabunError::NumError` если блога не существует
+    pub fn get_blog_id(&mut self,name: &str) -> Result<i32,TabunError> {
         let url = "/blog/".to_owned() + name;
-        self.get(&url).unwrap().find(And(Name("div"),Class("vote-item")))
+        let page = match self.get(&url) {
+            Ok(x) => x,
+            Err(x) => return Err(TabunError::NumError(x))
+        };
+
+        Ok(page.find(And(Name("div"),Class("vote-item")))
             .first().unwrap()
             .find(Name("span"))
             .first().unwrap()
             .attr("id").unwrap()
             .split("_").collect::<Vec<&str>>()
             .last().unwrap()
-            .parse::<i32>().unwrap()
+            .parse::<i32>().unwrap())
     }
 }
 
