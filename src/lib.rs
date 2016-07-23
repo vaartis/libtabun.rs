@@ -141,15 +141,14 @@ impl<'a> TClient<'a> {
         let mut buf = String::new();
         res.read_to_string(&mut buf).unwrap();
 
-        let ref cookie = if res.headers.has::<SetCookie>() {  
+        let cookie = if res.headers.has::<SetCookie>() {  
             Some(res.headers.get::<SetCookie>().unwrap())
         } else {
             None
         };
 
-        match *cookie {
-            None => {},
-            Some(_) => cookie.unwrap().apply_to_cookie_jar(&mut self.cookies),
+        if let Some(_) = cookie {
+            cookie.unwrap().apply_to_cookie_jar(&mut self.cookies);
         }
 
         Ok(Document::from(&*buf))
@@ -207,8 +206,8 @@ impl<'a> TClient<'a> {
     pub fn get_comments(&mut self,blog: &str, post_id: i32) -> Result<HashMap<i64,Comment>,TabunError> {
         let mut ret = HashMap::new();
 
-        let url = "/blog/".to_owned() + blog + "/".to_owned().as_str() + post_id.to_string().as_str() + ".html".to_string().as_str();
-        let page = try!(self.get(&url));
+        let ref url = "/blog/".to_owned() + blog + "/".to_owned().as_str() + post_id.to_string().as_str() + ".html".to_string().as_str();
+        let page = try!(self.get(url));
 
         let comments = page.find(And(Name("div"),Class("comments")));
         for wrapper in comments.find(And(Name("div"),Class("comment-wrapper"))).iter() {
@@ -259,7 +258,7 @@ impl<'a> TClient<'a> {
     ///```
     ///
     ///# Errors
-    ///Возвращает `TabunError::NumError` если блога не существует
+    ///Возвращает `TabunError::NumError`, если блога не существует
     pub fn get_blog_id(&mut self,name: &str) -> Result<i32,TabunError> {
         let url = "/blog/".to_owned() + name;
         let page = try!(self.get(&url));
