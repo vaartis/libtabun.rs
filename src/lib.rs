@@ -3,14 +3,20 @@ extern crate select;
 extern crate regex;
 extern crate cookie;
 extern crate time;
+extern crate multipart;
 
 use std::fmt::Display;
 
 use regex::Regex;
 
-use hyper::Client;
+use std::collections::HashMap;
+
+use hyper::client::Client;
+use hyper::client::request::Request;
 use hyper::header::{SetCookie,Cookie};
 use hyper::status::StatusCode;
+
+use multipart::client::lazy::Multipart;
 
 use std::io::Read;
 
@@ -30,6 +36,12 @@ pub enum TabunError {
     Error(String,String),
     ///Ошибка с номером, вроде 404 и 403
     NumError(StatusCode)
+}
+
+impl From<StatusCode> for TabunError {
+    fn from(x: StatusCode) -> Self {
+        TabunError::NumError(x)
+    }
 }
 
 ///Клиент табуна
@@ -62,8 +74,8 @@ impl<'a> TClient<'a> {
     ///если логин или пароль == "" - анонимус.
     ///
     ///# Examples
-    ///```
-    ///let mut user = TClient.new("логин","пароль")
+    ///```no_run
+    ///let mut user = libtabun::TClient::new("логин","пароль");
     ///```
     ///
     ///# Errors
@@ -86,10 +98,7 @@ impl<'a> TClient<'a> {
 
         let ls_key_regex = Regex::new(r"LIVESTREET_SECURITY_KEY = '(.+)'").unwrap();
 
-        let page = match user.get(&"/login".to_owned()) {
-            Ok(x) => x,
-            Err(x) => return Err(TabunError::NumError(x))
-        };
+        let page = try!(user.get(&"/login".to_owned()));
 
         let page_html = page.find(Name("html")).first().unwrap().html();
 
@@ -98,11 +107,9 @@ impl<'a> TClient<'a> {
         let added_url = "/login/ajax-login?login=".to_owned() + login +
             "&password=" + pass + "&security_ls_key=" + user.security_ls_key.as_str();
 
-        let res = match user.get(&added_url) {
-            Ok(x) => x.nth(0).unwrap().text(),
-            Err(x) => return Err(TabunError::NumError(x))
-        };
+        let res = try!(user.get(&added_url));
 
+        let res = res.nth(0).unwrap().text();
         let res = res.as_str();
 
 
@@ -112,10 +119,7 @@ impl<'a> TClient<'a> {
             let err = err_regex.captures(res).unwrap();
             Err(TabunError::Error(err.at(1).unwrap().to_owned(),err.at(2).unwrap().to_owned())) 
         } else {
-            let page = match user.get(&"".to_owned()) {
-                Ok(x) => x,
-                Err(x) => return Err(TabunError::NumError(x))
-            };
+            let page = try!(user.get(&"".to_owned()));
 
             user.name = page.find(Class("username")).first().unwrap().text();
 
@@ -155,9 +159,9 @@ impl<'a> TClient<'a> {
     ///иначе на чей-то коммент
     ///
     ///# Examples
-    ///```rust,no_run
-    ///# let mut user = TClient.new("логин","пароль");
-    ///user.comment(1234,"Привет!",0)
+    ///```no_run
+    ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    ///user.comment(1234,"Привет!",0);
     ///```
     ///
     ///# Errors
@@ -171,11 +175,9 @@ impl<'a> TClient<'a> {
             "&cmt_target_id=" + post_id.to_string().as_str() + "&reply=" + reply.to_string().as_str() +
             "&comment_text=" + body;
 
-        let res = match self.get(&url) {
-            Ok(x) => x.nth(0).unwrap().text(),
-            Err(x) => return Err(TabunError::NumError(x))
-        };
+        let res = try!(self.get(&url));
 
+        let res = res.nth(0).unwrap().text();
         let res = res.as_str();
 
         if err_regex.is_match(res) {
@@ -191,43 +193,41 @@ impl<'a> TClient<'a> {
     }
 
     ///Получить комменты из некоторого поста
+    ///в виде HashMap ID-Коммент
     ///
     ///# Examples
-    ///```
-    ///# let mut user = TClient.new("логин","пароль");
-    ///user.get_comments("lighthouse",157807)
+    ///```no_run
+    ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    ///user.get_comments("lighthouse",157807);
     ///```
     ///
     ///# Errors
     ///Может возвращать `TabunError::NumError`, если
     ///поста не существует
-    pub fn get_comments(&mut self,blog: &str, post_id: i32) -> Result<Vec<Comment>,TabunError> {
-        let mut ret = Vec::with_capacity(0);
+    pub fn get_comments(&mut self,blog: &str, post_id: i32) -> Result<HashMap<i64,Comment>,TabunError> {
+        let mut ret = HashMap::new();
 
         let url = "/blog/".to_owned() + blog + "/".to_owned().as_str() + post_id.to_string().as_str() + ".html".to_string().as_str();
-        let page = match self.get(&url) {
-            Ok(x) => x,
-            Err(x)  => return Err(TabunError::NumError(x)),
-        };
+        let page = try!(self.get(&url));
 
         let comments = page.find(And(Name("div"),Class("comments")));
         for wrapper in comments.find(And(Name("div"),Class("comment-wrapper"))).iter() {
             let mut parent = 0;
             if wrapper.parent().unwrap().is(And(Name("div"),Class("comment-wrapper"))) {
-                parent = wrapper.attr("id").unwrap().split("_").collect::<Vec<&str>>()[3].parse::<i32>().unwrap();
+                parent = wrapper.attr("id").unwrap().split("_").collect::<Vec<_>>()[3].parse::<i32>().unwrap();
             }
 
             for comm in wrapper.find(Name("section")).iter() {
                 let text = comm.find(And(Name("div"),Class("text"))).first().unwrap().inner_html().clone();
                 let text = text.as_str();
 
-                let id = comm.attr("id").unwrap().split("_").collect::<Vec<&str>>()[2].parse::<i64>().unwrap();
+                let id = comm.attr("id").unwrap().split("_").collect::<Vec<_>>()[2].parse::<i64>().unwrap();
 
                 let author = comm.find(And(Name("li"),Class("comment-author")))
                     .find(Name("a"))
                     .first()
                     .unwrap();
-                let author = author.attr("href").unwrap().split("/").collect::<Vec<&str>>()[4];
+                let author = author.attr("href").unwrap().split("/").collect::<Vec<_>>()[4];
 
                 let date = comm.find(Name("time")).first().unwrap();
                 let date = date.attr("datetime").unwrap();
@@ -236,14 +236,14 @@ impl<'a> TClient<'a> {
                     .first()
                     .unwrap()
                     .text().parse::<i32>().unwrap();
-                ret.push(Comment{
+                ret.insert(id,Comment{
                     body:   text.to_owned(),
                     id:     id,
                     author: author.to_owned(),
                     date:   date.to_owned(),
                     votes:  votes,
                     parent: parent,
-                })
+                });
             }
         }
         return Ok(ret);
@@ -252,29 +252,36 @@ impl<'a> TClient<'a> {
     ///Получает ID блога по его имени
     ///
     ///# Examples
-    ///```
-    ///# let mut user = TClient.new("логин","пароль");
+    ///```no_run
+    ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///let blog_id = user.get_blog_id("lighthouse").unwrap();
-    ///assert_eq!(blog_id,15558)
+    ///assert_eq!(blog_id,15558);
     ///```
     ///
     ///# Errors
     ///Возвращает `TabunError::NumError` если блога не существует
     pub fn get_blog_id(&mut self,name: &str) -> Result<i32,TabunError> {
         let url = "/blog/".to_owned() + name;
-        let page = match self.get(&url) {
-            Ok(x) => x,
-            Err(x) => return Err(TabunError::NumError(x))
-        };
+        let page = try!(self.get(&url));
 
         Ok(page.find(And(Name("div"),Class("vote-item")))
-            .first().unwrap()
-            .find(Name("span"))
-            .first().unwrap()
-            .attr("id").unwrap()
-            .split("_").collect::<Vec<&str>>()
-            .last().unwrap()
-            .parse::<i32>().unwrap())
+            .first()
+            .and_then(|x| x.find(Name("span")).first())
+            .unwrap().attr("id").unwrap()
+            .split("_").collect::<Vec<_>>().last()
+            .unwrap().parse::<i32>()
+            .unwrap())
     }
+
+    /*pub fn add_post(&mut self, blog_id: i32, title: &str, body: &str, tags: &str) {
+        let mut req = Multipart::new();
+        req.add_text("topic_type","topic");
+        req.add_text("blog_id",blog_id.to_string());
+        req.add_text("topic_title",title);
+        req.add_text("topic_text",body);
+        req.add_text("topic_tags",tags);
+        req.add_text("submit_topic_publish","Опубликовать");
+        req.client_request(&self.client,"https://tabun.everypony.ru/topic/add");
+    }*/
 }
 
