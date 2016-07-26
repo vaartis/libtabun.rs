@@ -70,6 +70,8 @@ impl Display for Comment {
     }
 }
 
+const HOST_URL: &'static str = "http://ls.andreymal.org";
+
 impl<'a> TClient<'a> {
 
     ///Входит на табунчик и сохраняет LIVESTREET_SECURITY_KEY,
@@ -130,7 +132,7 @@ impl<'a> TClient<'a> {
     }
     
     fn get(&mut self,url: &String) -> Result<Document,StatusCode>{
-        let full_url = "http://ls.andreymal.org/".to_owned() + &url;
+        let full_url = HOST_URL.to_owned() + &url;
 
         let mut res = self.client.get(
             &full_url)
@@ -283,8 +285,9 @@ impl<'a> TClient<'a> {
     pub fn add_post(&mut self, blog_id: i32, title: &str, body: &str, tags: &str) -> Result<i32,TabunError> {
         use mdo::option::{bind};
 
+        let url = HOST_URL.to_owned() + "/topic/add";
         let mut request = Request::new(hyper::method::Method::Post,
-                               hyper::Url::from_str("http://ls.andreymal.org/topic/add").unwrap()).unwrap();
+                               hyper::Url::from_str(&*url).unwrap()).unwrap();
         request.headers_mut().set(Cookie::from_cookie_jar(&self.cookies));
 
         let mut req = Multipart::from_request(request).unwrap();
