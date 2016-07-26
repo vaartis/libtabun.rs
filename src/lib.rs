@@ -50,8 +50,8 @@ impl From<StatusCode> for TabunError {
 pub struct TClient<'a> {
     pub name:               String,
     pub security_ls_key:    String,
-    client:             Client,
-    cookies:            CookieJar<'a>,
+    client:                 Client,
+    cookies:                CookieJar<'a>,
 }
 
 #[derive(Debug)]
@@ -223,7 +223,7 @@ impl<'a> TClient<'a> {
             }
 
             for comm in wrapper.find(Name("section")).iter() {
-                let text = comm.find(And(Name("div"),Class("text"))).first().unwrap().inner_html().clone();
+                let text = comm.find(And(Name("div"),Class("text"))).first().unwrap().inner_html();
                 let text = text.as_str();
 
                 let id = comm.attr("id").unwrap().split("_").collect::<Vec<_>>()[2].parse::<i64>().unwrap();
@@ -294,7 +294,7 @@ impl<'a> TClient<'a> {
 
 
         req.write_text("topic_type","topic");
-        req.write_text("security_ls_key",self.security_ls_key.clone());
+        req.write_text("security_ls_key",&self.security_ls_key);
         req.write_text("blog_id",blog_id.to_string());
         req.write_text("topic_title",title);
         req.write_text("topic_text",body);
