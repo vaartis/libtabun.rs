@@ -4,9 +4,10 @@ version = "0.1.0"
 authors = ["TyanNN <tyannn@cocaine.ninja>"]
 
 [dependencies]
-hyper		= "*"
-multipart	= "*"
+hyper		= "0.8"
+multipart	= "0.7.0"
 select		= "*"
 regex		= "*"
 cookie		= "*"
 time		= "*"
+mdo 		= "*"

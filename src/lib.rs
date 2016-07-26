@@ -4,8 +4,10 @@ extern crate regex;
 extern crate cookie;
 extern crate time;
 extern crate multipart;
+#[macro_use] extern crate mdo;
 
 use std::fmt::Display;
+use std::str::FromStr;
 
 use regex::Regex;
 
@@ -16,7 +18,7 @@ use hyper::client::request::Request;
 use hyper::header::{SetCookie,Cookie};
 use hyper::status::StatusCode;
 
-use multipart::client::lazy::Multipart;
+use multipart::client::Multipart;
 
 use std::io::Read;
 
@@ -128,7 +130,7 @@ impl<'a> TClient<'a> {
     }
     
     fn get(&mut self,url: &String) -> Result<Document,StatusCode>{
-        let full_url = "https://tabun.everypony.ru".to_owned() + &url;
+        let full_url = "http://ls.andreymal.org/".to_owned() + &url;
 
         let mut res = self.client.get(
             &full_url)
@@ -167,6 +169,8 @@ impl<'a> TClient<'a> {
     ///Может возвращать `TabunError::NumError`, если
     ///поста не существует
     pub fn comment(&mut self,post_id: i32, body : &str, reply: i32) -> Result<i64,TabunError>{
+        use mdo::option::{bind};
+
         let id_regex = Regex::new("\"sCommentId\":(\\d+)").unwrap();
         let err_regex = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"").unwrap();
 
@@ -184,11 +188,11 @@ impl<'a> TClient<'a> {
             return Err(TabunError::Error(err.at(1).unwrap().to_owned(),err.at(2).unwrap().to_owned()));
         }
 
-        Ok(id_regex.captures(res)
-            .unwrap()
-            .at(1)
-            .unwrap()
-            .parse::<i64>().unwrap())
+        Ok(mdo!(
+            captures    =<< id_regex.captures(res);
+            r           =<< captures.at(1);
+            ret r.parse::<i64>().ok()
+        ).unwrap())
     }
 
     ///Получить комменты из некоторого поста
@@ -260,27 +264,62 @@ impl<'a> TClient<'a> {
     ///# Errors
     ///Возвращает `TabunError::NumError`, если блога не существует
     pub fn get_blog_id(&mut self,name: &str) -> Result<i32,TabunError> {
+        use mdo::option::{bind,ret};
+
         let url = "/blog/".to_owned() + name;
         let page = try!(self.get(&url));
 
-        Ok(page.find(And(Name("div"),Class("vote-item")))
-            .first()
-            .and_then(|x| x.find(Name("span")).first())
-            .unwrap().attr("id").unwrap()
-            .split("_").collect::<Vec<_>>().last()
-            .unwrap().parse::<i32>()
-            .unwrap())
+        Ok(mdo!(
+            x =<< page.find(And(Name("div"),Class("vote-item"))).first();
+            x =<< x.find(Name("span")).first();
+            x =<< x.attr("id");
+            x =<< x.split("_").collect::<Vec<_>>().last();
+            x =<< x.parse::<i32>().ok();
+            ret ret(x)
+        ).unwrap())
     }
 
-    /*pub fn add_post(&mut self, blog_id: i32, title: &str, body: &str, tags: &str) {
-        let mut req = Multipart::new();
-        req.add_text("topic_type","topic");
-        req.add_text("blog_id",blog_id.to_string());
-        req.add_text("topic_title",title);
-        req.add_text("topic_text",body);
-        req.add_text("topic_tags",tags);
-        req.add_text("submit_topic_publish","Опубликовать");
-        req.client_request(&self.client,"https://tabun.everypony.ru/topic/add");
-    }*/
+    #[allow(unused_must_use)]
+    pub fn add_post(&mut self, blog_id: i32, title: &str, body: &str, tags: &str) -> Result<i32,TabunError> {
+        use mdo::option::{bind};
+
+        let mut request = Request::new(hyper::method::Method::Post,
+                               hyper::Url::from_str("http://ls.andreymal.org/topic/add").unwrap()).unwrap();
+        request.headers_mut().set(Cookie::from_cookie_jar(&self.cookies));
+
+        let mut req = Multipart::from_request(request).unwrap();
+
+
+        req.write_text("topic_type","topic");
+        req.write_text("security_ls_key",self.security_ls_key.clone());
+        req.write_text("blog_id",blog_id.to_string());
+        req.write_text("topic_title",title);
+        req.write_text("topic_text",body);
+        req.write_text("topic_tags",tags);
+        req.write_text("submit_topic_publish","Опубликовать");
+
+        let res = req.send().unwrap();
+
+        if res.status != hyper::status::StatusCode::MovedPermanently { return Err(TabunError::NumError(res.status)) }
+
+        let cookie = if res.headers.has::<SetCookie>() {
+            Some(res.headers.get::<SetCookie>().unwrap())
+        } else {
+            None
+        };
+
+        if let Some(_) = cookie {
+            cookie.unwrap().apply_to_cookie_jar(&mut self.cookies);
+        }
+
+        let r = std::str::from_utf8(&*res.headers.get_raw("location").unwrap()[0]).unwrap();
+
+        Ok(mdo!(
+            regex       =<< Regex::new(r"(\d+).html$").ok();
+            captures    =<< regex.captures(r);
+            r           =<< captures.at(1);
+            ret r.parse::<i32>().ok()
+        ).unwrap())
+    }
 }
 
