@@ -91,7 +91,7 @@ impl<'a> TClient<'a> {
                 name:               "".to_owned(),
                 security_ls_key:    "".to_owned(),
                 client:             Client::new(),
-                cookies:            CookieJar::new(&*time::now().to_timespec().sec.to_string().as_bytes()),
+                cookies:            CookieJar::new(time::now().to_timespec().sec.to_string().as_bytes()),
             });
         }
 
@@ -106,7 +106,7 @@ impl<'a> TClient<'a> {
 
         let page_html = page.find(Name("html")).first().unwrap().html();
 
-        user.security_ls_key = ls_key_regex.captures(&*page_html).unwrap().at(1).unwrap().to_owned();
+        user.security_ls_key = ls_key_regex.captures(&page_html).unwrap().at(1).unwrap().to_owned();
 
         let added_url = "/login/ajax-login?login=".to_owned() + login +
             "&password=" + pass + "&security_ls_key=" + user.security_ls_key.as_str();
@@ -287,7 +287,7 @@ impl<'a> TClient<'a> {
 
         let url = HOST_URL.to_owned() + "/topic/add";
         let mut request = Request::new(hyper::method::Method::Post,
-                               hyper::Url::from_str(&*url).unwrap()).unwrap();
+                               hyper::Url::from_str(&url).unwrap()).unwrap();
         request.headers_mut().set(Cookie::from_cookie_jar(&self.cookies));
 
         let mut req = Multipart::from_request(request).unwrap();
@@ -315,7 +315,7 @@ impl<'a> TClient<'a> {
             cookie.unwrap().apply_to_cookie_jar(&mut self.cookies);
         }
 
-        let r = std::str::from_utf8(&*res.headers.get_raw("location").unwrap()[0]).unwrap();
+        let r = std::str::from_utf8(&res.headers.get_raw("location").unwrap()[0]).unwrap();
 
         Ok(mdo!(
             regex       =<< Regex::new(r"(\d+).html$").ok();
