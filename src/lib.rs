@@ -87,6 +87,13 @@ pub struct Post {
     pub id:             i32,
 }
 
+#[derive(Debug,Clone)]
+pub struct EditablePost {
+    pub title:          String,
+    pub body:           String,
+    pub tags:           Vec<String>,
+}
+
 impl Display for Comment {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "Comment({},\"{}\",\"{}\")", self.id, self.author, self.body)
@@ -99,7 +106,7 @@ impl Display for Post {
     }
 }
 
-const HOST_URL: &'static str = "http://ls.andreymal.org";
+const HOST_URL: &'static str = "https://tabun.everypony.ru";
 
 impl<'a> TClient<'a> {
 
@@ -357,19 +364,23 @@ impl<'a> TClient<'a> {
         ).unwrap())
     }
 
-    pub fn edit_post(&mut self, post_id: i32, blog_id: i32, title: &str, body: &str, tags: &str, forbid_comment: bool) -> Result<i32,TabunError> {
+    pub fn edit_post(&mut self, post_id: i32, blog_id: i32, title: &str, body: &str, tags: Vec<String>, forbid_comment: bool) -> Result<i32,TabunError> {
         use mdo::option::{bind};
 
         let blog_id = blog_id.to_string();
         let key = self.security_ls_key.clone();
         let forbid_comment = if forbid_comment == true { "1" } else { "0" };
+        let mut rtags = String::new();
+        for i in tags {
+            rtags += &format!("{},",i);
+        }
 
         let bd = map![
             "topic_type"            =>  "topic",
             "blog_id"               =>  &blog_id,
             "topic_title"           =>  title,
             "topic_text"            =>  body,
-            "topic_tags"            =>  tags,
+            "topic_tags"            =>  &rtags,
             "submit_topic_publish"  =>  "Опубликовать",
             "security_ls_key"       =>  &key,
             "topic_forbid_comment"  =>  &forbid_comment
@@ -444,6 +455,23 @@ impl<'a> TClient<'a> {
                 id:             post_id, });
        }
        Ok(ret)
+    }
+
+    pub fn get_editable_post(&mut self, post_id: i32) -> Result<EditablePost,TabunError> {
+        let res = try!(self.get(&format!("/topic/edit/{}",post_id)));
+
+        let title = res.find(Attr("id","topic_title")).first().unwrap();
+        let title = title.attr("value").unwrap().to_string();
+
+        let tags = res.find(Attr("id","topic_tags")).first().unwrap();
+        let tags = tags.attr("value").unwrap();
+        let tags = tags.split(",").map(|x| x.to_string()).collect::<Vec<String>>();
+
+        Ok(EditablePost{
+            title:  title,
+            body:   res.find(Attr("id","topic_text")).first().unwrap().text(),
+            tags:   tags.clone()
+        })
     }
 
     pub fn get_post(&mut self,blog_name: &str,post_id: i32) -> Result<Post,TabunError>{
