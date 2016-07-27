@@ -23,9 +23,21 @@ use multipart::client::Multipart;
 use std::io::Read;
 
 use select::document::Document;
-use select::predicate::{Class, Name, And};
+use select::predicate::{Class, Name, And, Attr};
 
 use cookie::CookieJar;
+
+macro_rules! map(
+    { $($key:expr => $value:expr),+ } => {
+        {
+            let mut m = ::std::collections::HashMap::new();
+            $(
+                m.insert($key, $value);
+            )+
+            m
+        }
+     };
+);
 
 #[derive(Debug)]
 pub enum TabunError {
@@ -64,9 +76,26 @@ pub struct Comment {
     pub parent: i32,
 }
 
+#[derive(Debug)]
+pub struct Post {
+    pub title:          String,
+    pub body:           String,
+    pub date:           String,
+    pub tags:           Vec<String>,
+    pub comments_count: i32,
+    pub author:         String,
+    pub id:             i32,
+}
+
 impl Display for Comment {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "Comment({},\"{}\",\"{}\")", self.id, self.author, self.body)
+    }
+}
+
+impl Display for Post {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Post({},\"{}\",\"{}\")", self.id, self.author, self.body)
     }
 }
 
@@ -156,6 +185,25 @@ impl<'a> TClient<'a> {
         }
 
         Ok(Document::from(&*buf))
+    }
+
+    fn multipart(&mut self,url: &str, bd: HashMap<&str,&str>) -> Result<hyper::client::Response,StatusCode> {
+        let url = HOST_URL.to_owned() + &url;
+        let mut request = Request::new(hyper::method::Method::Post,
+                               hyper::Url::from_str(&url).unwrap()).unwrap();
+        request.headers_mut().set(Cookie::from_cookie_jar(&self.cookies));
+
+        let mut req = Multipart::from_request(request).unwrap();
+
+        for (param,val) in bd {
+            let _ = req.write_text(param,val);
+        }
+
+        let res = req.send().unwrap();
+
+        if res.status != hyper::Ok && res.status != hyper::status::StatusCode::MovedPermanently { return Err(res.status) }
+
+        Ok(res)
     }
 
     ///Оставить коммент к какому-нибудь посту, reply=0 - ответ на сам пост,
@@ -281,39 +329,23 @@ impl<'a> TClient<'a> {
         ).unwrap())
     }
 
-    #[allow(unused_must_use)]
     pub fn add_post(&mut self, blog_id: i32, title: &str, body: &str, tags: &str) -> Result<i32,TabunError> {
         use mdo::option::{bind};
 
-        let url = HOST_URL.to_owned() + "/topic/add";
-        let mut request = Request::new(hyper::method::Method::Post,
-                               hyper::Url::from_str(&url).unwrap()).unwrap();
-        request.headers_mut().set(Cookie::from_cookie_jar(&self.cookies));
+        let blog_id = blog_id.to_string();
+        let key = self.security_ls_key.clone();
 
-        let mut req = Multipart::from_request(request).unwrap();
+        let bd = map![
+            "topic_type"            =>  "topic",
+            "blog_id"               =>  &blog_id,
+            "topic_title"           =>  title,
+            "topic_text"            =>  body,
+            "topic_tags"            =>  tags,
+            "submit_topic_publish"  =>  "Опубликовать",
+            "security_ls_key"       =>  &key
+        ];
 
-
-        req.write_text("topic_type","topic");
-        req.write_text("security_ls_key",&self.security_ls_key);
-        req.write_text("blog_id",blog_id.to_string());
-        req.write_text("topic_title",title);
-        req.write_text("topic_text",body);
-        req.write_text("topic_tags",tags);
-        req.write_text("submit_topic_publish","Опубликовать");
-
-        let res = req.send().unwrap();
-
-        if res.status != hyper::status::StatusCode::MovedPermanently { return Err(TabunError::NumError(res.status)) }
-
-        let cookie = if res.headers.has::<SetCookie>() {
-            Some(res.headers.get::<SetCookie>().unwrap())
-        } else {
-            None
-        };
-
-        if let Some(_) = cookie {
-            cookie.unwrap().apply_to_cookie_jar(&mut self.cookies);
-        }
+        let res = try!(self.multipart("/topic/add",bd));
 
         let r = std::str::from_utf8(&res.headers.get_raw("location").unwrap()[0]).unwrap();
 
@@ -323,6 +355,107 @@ impl<'a> TClient<'a> {
             r           =<< captures.at(1);
             ret r.parse::<i32>().ok()
         ).unwrap())
+    }
+
+    pub fn edit_post(&mut self, post_id: i32, blog_id: i32, title: &str, body: &str, tags: &str, forbid_comment: bool) -> Result<i32,TabunError> {
+        use mdo::option::{bind};
+
+        let blog_id = blog_id.to_string();
+        let key = self.security_ls_key.clone();
+        let forbid_comment = if forbid_comment == true { "1" } else { "0" };
+
+        let bd = map![
+            "topic_type"            =>  "topic",
+            "blog_id"               =>  &blog_id,
+            "topic_title"           =>  title,
+            "topic_text"            =>  body,
+            "topic_tags"            =>  tags,
+            "submit_topic_publish"  =>  "Опубликовать",
+            "security_ls_key"       =>  &key,
+            "topic_forbid_comment"  =>  &forbid_comment
+        ];
+
+        let res = try!(self.multipart(&format!("/topic/edit/{}",post_id),bd));
+
+        let r = std::str::from_utf8(&res.headers.get_raw("location").unwrap()[0]).unwrap();
+
+        Ok(mdo!(
+            regex       =<< Regex::new(r"(\d+).html$").ok();
+            captures    =<< regex.captures(r);
+            r           =<< captures.at(1);
+            ret r.parse::<i32>().ok()
+        ).unwrap())
+    }
+
+    pub fn get_post(&mut self,blog_name: &str,post_id: i32) -> Result<Post,TabunError>{
+        let res = if blog_name == "" {
+            try!(self.get(&format!("/blog/{}.html",post_id)))
+        } else {
+            try!(self.get(&format!("/blog/{}/{}.html",blog_name,post_id)))
+        };
+
+        let post_title = res.find(And(Name("h1"),Class("topic-title")))
+            .first()
+            .unwrap()
+            .text();
+
+        let post_body = res.find(And(Name("div"),Class("topic-content")))
+            .first()
+            .unwrap()
+            .inner_html();
+        let post_body = post_body.trim();
+
+        let post_date = res.find(And(Name("li"),Class("topic-info-date")))
+            .find(Name("time"))
+            .first()
+            .unwrap();
+        let post_date = post_date.attr("datetime")
+            .unwrap();
+
+        let mut post_tags = Vec::new();
+        for t in res.find(And(Name("a"),Attr("rel","tag"))).iter() {
+            post_tags.push(t.text());
+        }
+
+        let cm_count = res.find(And(Name("span"),Attr("id","count-comments")))
+            .first()
+            .unwrap()
+            .text()
+            .parse::<i32>()
+            .unwrap();
+
+        let post_author = res.find(And(Name("div"),Class("topic-info")))
+            .find(And(Name("a"),Attr("rel","author")))
+            .first()
+            .unwrap()
+            .text();
+
+        Ok(Post{
+            title:          post_title,
+            body:           post_body.to_owned(),
+            date:           post_date.to_owned(),
+            tags:           post_tags,
+            comments_count: cm_count,
+            author:         post_author,
+            id:             post_id,
+        })
+    }
+
+    pub fn comments_subscribe(&mut self, post_id: i32, subscribed: bool) {
+        let subscribed = if subscribed == true { "1" } else { "0" };
+
+        let post_id = post_id.to_string();
+        let key = self.security_ls_key.clone();
+
+        let body = map![
+        "target_type"       =>  "topic_new_comment",
+        "target_id"         =>  post_id.as_str(),
+        "value"             =>  subscribed,
+        "mail"              =>  "",
+        "security_ls_key"   => &key
+        ];
+
+        let _ = self.multipart("/subscribe/ajax-subscribe-toggle",body);
     }
 }
 
