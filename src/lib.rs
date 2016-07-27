@@ -387,6 +387,65 @@ impl<'a> TClient<'a> {
         ).unwrap())
     }
 
+    pub fn get_posts(&mut self, blog_name: &str, page: i32) -> Result<Vec<Post>,TabunError>{
+       let res = try!(self.get(&format!("/blog/{}/page{}", blog_name, page)));
+       let mut ret = Vec::new();
+
+       for p in res.find(Name("article")).iter() {
+        let post_id = p.find(And(Name("div"),Class("vote-topic")))
+               .first()
+               .unwrap()
+               .attr("id")
+               .unwrap()
+               .split("_").collect::<Vec<_>>()[3].parse::<i32>().unwrap();
+
+        let post_title = p.find(And(Name("h1"),Class("topic-title")))
+            .first()
+            .unwrap()
+            .text();
+
+        let post_body = p.find(And(Name("div"),Class("topic-content")))
+            .first()
+            .unwrap()
+            .inner_html();
+        let post_body = post_body.trim();
+
+        let post_date = p.find(And(Name("li"),Class("topic-info-date")))
+            .find(Name("time"))
+            .first()
+            .unwrap();
+        let post_date = post_date.attr("datetime")
+            .unwrap();
+
+        let mut post_tags = Vec::new();
+        for t in res.find(And(Name("a"),Attr("rel","tag"))).iter() {
+            post_tags.push(t.text());
+        }
+
+        let cm_count = p.find(And(Name("li"),Class("topic-info-comments")))
+            .first()
+            .unwrap()
+            .find(Name("span")).first().unwrap().text()
+            .parse::<i32>().unwrap();
+
+        let post_author = res.find(And(Name("div"),Class("topic-info")))
+            .find(And(Name("a"),Attr("rel","author")))
+            .first()
+            .unwrap()
+            .text();
+        ret.push(
+            Post{
+                title:          post_title,
+                body:           post_body.to_owned(),
+                date:           post_date.to_owned(),
+                tags:           post_tags,
+                comments_count: cm_count,
+                author:         post_author,
+                id:             post_id, });
+       }
+       Ok(ret)
+    }
+
     pub fn get_post(&mut self,blog_name: &str,post_id: i32) -> Result<Post,TabunError>{
         let res = if blog_name == "" {
             try!(self.get(&format!("/blog/{}.html",post_id)))
