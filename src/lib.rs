@@ -66,7 +66,7 @@ pub struct TClient<'a> {
     cookies:                CookieJar<'a>,
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct Comment {
     pub body:   String,
     pub id:     i64,
@@ -76,7 +76,7 @@ pub struct Comment {
     pub parent: i32,
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct Post {
     pub title:          String,
     pub body:           String,
