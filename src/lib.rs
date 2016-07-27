@@ -106,7 +106,8 @@ impl Display for Post {
     }
 }
 
-const HOST_URL: &'static str = "https://tabun.everypony.ru";
+///URL сайта. Ибо по идее может работать и с другими штуками ня лайвстрите
+pub const HOST_URL: &'static str = "https://tabun.everypony.ru";
 
 impl<'a> TClient<'a> {
 
@@ -117,10 +118,6 @@ impl<'a> TClient<'a> {
     ///```no_run
     ///let mut user = libtabun::TClient::new("логин","пароль");
     ///```
-    ///
-    ///# Errors
-    ///Если войти не удалось, то возвращает `TabunError::Error`
-    ///с описание ошибки
     pub fn new(login: &str, pass: &str) -> Result<TClient<'a>,TabunError> {
         if login == "" || pass == "" {
             return Ok(TClient{
@@ -221,10 +218,6 @@ impl<'a> TClient<'a> {
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.comment(1234,"Привет!",0);
     ///```
-    ///
-    ///# Errors
-    ///Может возвращать `TabunError::NumError`, если
-    ///поста не существует
     pub fn comment(&mut self,post_id: i32, body : &str, reply: i32) -> Result<i64,TabunError>{
         use mdo::option::{bind};
 
@@ -260,10 +253,6 @@ impl<'a> TClient<'a> {
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.get_comments("lighthouse",157807);
     ///```
-    ///
-    ///# Errors
-    ///Может возвращать `TabunError::NumError`, если
-    ///поста не существует
     pub fn get_comments(&mut self,blog: &str, post_id: i32) -> Result<HashMap<i64,Comment>,TabunError> {
         let mut ret = HashMap::new();
 
@@ -317,9 +306,6 @@ impl<'a> TClient<'a> {
     ///let blog_id = user.get_blog_id("lighthouse").unwrap();
     ///assert_eq!(blog_id,15558);
     ///```
-    ///
-    ///# Errors
-    ///Возвращает `TabunError::NumError`, если блога не существует
     pub fn get_blog_id(&mut self,name: &str) -> Result<i32,TabunError> {
         use mdo::option::{bind,ret};
 
@@ -336,18 +322,30 @@ impl<'a> TClient<'a> {
         ).unwrap())
     }
 
-    pub fn add_post(&mut self, blog_id: i32, title: &str, body: &str, tags: &str) -> Result<i32,TabunError> {
+    ///Создаёт пост в указанном блоге
+    ///
+    ///# Examples
+    ///```no_run
+    ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    ///let blog_id = user.get_blog_id("computers").unwrap();
+    ///user.add_post(blog_id,"Название поста","Текст поста",vec!["тэг раз","тэг два"]);
+    ///```
+    pub fn add_post(&mut self, blog_id: i32, title: &str, body: &str, tags: Vec<&str>) -> Result<i32,TabunError> {
         use mdo::option::{bind};
 
         let blog_id = blog_id.to_string();
         let key = self.security_ls_key.clone();
+        let mut rtags = String::new();
+        for i in tags {
+            rtags += &format!("{},",i);
+        }
 
         let bd = map![
             "topic_type"            =>  "topic",
             "blog_id"               =>  &blog_id,
             "topic_title"           =>  title,
             "topic_text"            =>  body,
-            "topic_tags"            =>  tags,
+            "topic_tags"            =>  &rtags,
             "submit_topic_publish"  =>  "Опубликовать",
             "security_ls_key"       =>  &key
         ];
@@ -364,6 +362,14 @@ impl<'a> TClient<'a> {
         ).unwrap())
     }
 
+    ///Редактирует пост
+    ///
+    ///# Examples
+    ///```no_run
+    ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    ///let blog_id = user.get_blog_id("computers").unwrap();
+    ///user.edit_post(157198,blog_id,"Новое название", "Новый текст", vec!["тэг".to_string()],false);
+    ///```
     pub fn edit_post(&mut self, post_id: i32, blog_id: i32, title: &str, body: &str, tags: Vec<String>, forbid_comment: bool) -> Result<i32,TabunError> {
         use mdo::option::{bind};
 
@@ -398,6 +404,13 @@ impl<'a> TClient<'a> {
         ).unwrap())
     }
 
+    ///Получает посты из блога
+    ///
+    ///# Examples
+    ///```no_run
+    ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    ///user.get_posts("lighthouse",1);
+    ///```
     pub fn get_posts(&mut self, blog_name: &str, page: i32) -> Result<Vec<Post>,TabunError>{
        let res = try!(self.get(&format!("/blog/{}/page{}", blog_name, page)));
        let mut ret = Vec::new();
@@ -457,6 +470,13 @@ impl<'a> TClient<'a> {
        Ok(ret)
     }
 
+    ///Получает EditablePost со страницы редактирования поста
+    ///
+    ///# Examples
+    ///```no_run
+    ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    ///user.get_editable_post(1111);
+    ///```
     pub fn get_editable_post(&mut self, post_id: i32) -> Result<EditablePost,TabunError> {
         let res = try!(self.get(&format!("/topic/edit/{}",post_id)));
 
@@ -474,6 +494,16 @@ impl<'a> TClient<'a> {
         })
     }
 
+    ///Получает пост, блог можно опустить (передать `""`), но лучше так не делать,
+    ///дабы избежать доволнительных перенаправлений.
+    ///
+    ///# Examples
+    ///```no_run
+    ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    ///user.get_post("computers",157198);
+    /// //или
+    ///user.get_post("",157198);
+    ///```
     pub fn get_post(&mut self,blog_name: &str,post_id: i32) -> Result<Post,TabunError>{
         let res = if blog_name == "" {
             try!(self.get(&format!("/blog/{}.html",post_id)))
@@ -528,6 +558,12 @@ impl<'a> TClient<'a> {
         })
     }
 
+    ///Подписаться/отписаться от комментариев к посту.
+    ///# Examples
+    ///```no_run
+    ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    ///user.comments_subscribe(157198,false);
+    ///```
     pub fn comments_subscribe(&mut self, post_id: i32, subscribed: bool) {
         let subscribed = if subscribed == true { "1" } else { "0" };
 
