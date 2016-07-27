@@ -150,7 +150,7 @@ impl<'a> TClient<'a> {
             Err(TabunError::HackingAttempt)
         } else if err_regex.is_match(res) {
             let err = err_regex.captures(res).unwrap();
-            Err(TabunError::Error(err.at(1).unwrap().to_owned(),err.at(2).unwrap().to_owned())) 
+            Err(TabunError::Error(err.at(1).unwrap().to_owned(),err.at(2).unwrap().to_owned()))
         } else {
             let page = try!(user.get(&"".to_owned()));
 
@@ -159,7 +159,7 @@ impl<'a> TClient<'a> {
             Ok(user)
         }
     }
-    
+
     fn get(&mut self,url: &String) -> Result<Document,StatusCode>{
         let full_url = HOST_URL.to_owned() + &url;
 
@@ -174,7 +174,7 @@ impl<'a> TClient<'a> {
         let mut buf = String::new();
         res.read_to_string(&mut buf).unwrap();
 
-        let cookie = if res.headers.has::<SetCookie>() {  
+        let cookie = if res.headers.has::<SetCookie>() {
             Some(res.headers.get::<SetCookie>().unwrap())
         } else {
             None
@@ -458,4 +458,3 @@ impl<'a> TClient<'a> {
         let _ = self.multipart("/subscribe/ajax-subscribe-toggle",body);
     }
 }
-
