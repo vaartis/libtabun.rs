@@ -141,8 +141,8 @@ impl<'a> TClient<'a> {
 
         user.security_ls_key = ls_key_regex.captures(&page_html).unwrap().at(1).unwrap().to_owned();
 
-        let added_url = "/login/ajax-login?login=".to_owned() + login +
-            "&password=" + pass + "&security_ls_key=" + user.security_ls_key.as_str();
+        let added_url = format!("/login/ajax-login?login={}&password={}&security_ls_key={}"
+                                , login, pass, user.security_ls_key);
 
         let res = try!(user.get(&added_url));
 
@@ -165,7 +165,7 @@ impl<'a> TClient<'a> {
     }
 
     fn get(&mut self,url: &String) -> Result<Document,StatusCode>{
-        let full_url = HOST_URL.to_owned() + &url;
+        let full_url = format!("{}{}", HOST_URL, url);
 
         let mut res = self.client.get(
             &full_url)
@@ -192,7 +192,7 @@ impl<'a> TClient<'a> {
     }
 
     fn multipart(&mut self,url: &str, bd: HashMap<&str,&str>) -> Result<hyper::client::Response,StatusCode> {
-        let url = HOST_URL.to_owned() + &url;
+        let url = format!("{}{}", HOST_URL, url);
         let mut request = Request::new(hyper::method::Method::Post,
                                hyper::Url::from_str(&url).unwrap()).unwrap();
         request.headers_mut().set(Cookie::from_cookie_jar(&self.cookies));
@@ -224,9 +224,8 @@ impl<'a> TClient<'a> {
         let id_regex = Regex::new("\"sCommentId\":(\\d+)").unwrap();
         let err_regex = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"").unwrap();
 
-        let url = "/blog/ajaxaddcomment?security_ls_key=".to_owned() + self.security_ls_key.as_str() +
-            "&cmt_target_id=" + post_id.to_string().as_str() + "&reply=" + reply.to_string().as_str() +
-            "&comment_text=" + body;
+        let url = format!("/blog/ajaxaddcomment?security_ls_key={}&cmt_target_id={}&reply={}&comment_text={}"
+                          , self.security_ls_key,post_id,reply,body);
 
         let res = try!(self.get(&url));
 
@@ -246,7 +245,8 @@ impl<'a> TClient<'a> {
     }
 
     ///Получить комменты из некоторого поста
-    ///в виде HashMap ID-Коммент
+    ///в виде HashMap ID-Коммент. Если блог указан как ""
+    ///и пост указан как 0, то получает из `/comments/`
     ///
     ///# Examples
     ///```no_run
@@ -259,7 +259,7 @@ impl<'a> TClient<'a> {
         let ref url = if blog == "" && post_id == 0 {
             "/comments".to_owned()
         } else {
-            "/blog/".to_owned() + blog + "/".to_owned().as_str() + post_id.to_string().as_str() + ".html".to_string().as_str()
+            format!("/blog/{}/{}.html", blog, post_id)
         };
 
         let page = try!(self.get(url));
@@ -315,7 +315,7 @@ impl<'a> TClient<'a> {
     pub fn get_blog_id(&mut self,name: &str) -> Result<i32,TabunError> {
         use mdo::option::{bind,ret};
 
-        let url = "/blog/".to_owned() + name;
+        let url = format!("/blog/{}", name);
         let page = try!(self.get(&url));
 
         Ok(mdo!(
@@ -343,7 +343,7 @@ impl<'a> TClient<'a> {
         let key = self.security_ls_key.clone();
         let mut rtags = String::new();
         for i in tags {
-            rtags += &format!("{},",i);
+            rtags += &format!("{},", i);
         }
 
         let bd = map![
@@ -384,7 +384,7 @@ impl<'a> TClient<'a> {
         let forbid_comment = if forbid_comment == true { "1" } else { "0" };
         let mut rtags = String::new();
         for i in tags {
-            rtags += &format!("{},",i);
+            rtags += &format!("{},", i);
         }
 
         let bd = map![
@@ -398,7 +398,7 @@ impl<'a> TClient<'a> {
             "topic_forbid_comment"  =>  &forbid_comment
         ];
 
-        let res = try!(self.multipart(&format!("/topic/edit/{}",post_id),bd));
+        let res = try!(self.multipart(&format!("/topic/edit/{}",post_id), bd));
 
         let r = std::str::from_utf8(&res.headers.get_raw("location").unwrap()[0]).unwrap();
 
