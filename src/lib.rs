@@ -73,7 +73,7 @@ pub struct Comment {
     pub author: String,
     pub date:   String,
     pub votes:  i32,
-    pub parent: i32,
+    pub parent: i64,
 }
 
 #[derive(Debug,Clone)]
@@ -256,21 +256,28 @@ impl<'a> TClient<'a> {
     pub fn get_comments(&mut self,blog: &str, post_id: i32) -> Result<HashMap<i64,Comment>,TabunError> {
         let mut ret = HashMap::new();
 
-        let ref url = "/blog/".to_owned() + blog + "/".to_owned().as_str() + post_id.to_string().as_str() + ".html".to_string().as_str();
+        let ref url = if blog == "" && post_id == 0 {
+            "/comments".to_owned()
+        } else {
+            "/blog/".to_owned() + blog + "/".to_owned().as_str() + post_id.to_string().as_str() + ".html".to_string().as_str()
+        };
+
         let page = try!(self.get(url));
 
         let comments = page.find(And(Name("div"),Class("comments")));
-        for wrapper in comments.find(And(Name("div"),Class("comment-wrapper"))).iter() {
-            let mut parent = 0;
-            if wrapper.parent().unwrap().is(And(Name("div"),Class("comment-wrapper"))) {
-                parent = wrapper.attr("id").unwrap().split("_").collect::<Vec<_>>()[3].parse::<i32>().unwrap();
-            }
 
-            for comm in wrapper.find(Name("section")).iter() {
+            for comm in comments.find(Class("comment")).iter() {
+                let mut parent = 0i64;
+                if comm.parent().unwrap().parent().unwrap().is(And(Name("div"),Class("comment-wrapper"))) {
+                    let p = comm.find(And(Name("li"),Class("vote"))).first().unwrap();
+                    parent = p.attr("id").unwrap().split("_").collect::<Vec<_>>()[3].parse::<i64>().unwrap();
+                }
+
                 let text = comm.find(And(Name("div"),Class("text"))).first().unwrap().inner_html();
                 let text = text.as_str();
 
-                let id = comm.attr("id").unwrap().split("_").collect::<Vec<_>>()[2].parse::<i64>().unwrap();
+                let id = comm.find(And(Name("li"),Class("vote"))).first().unwrap();
+                let id = id.attr("id").unwrap().split("_").collect::<Vec<_>>()[3].parse::<i64>().unwrap();
 
                 let author = comm.find(And(Name("li"),Class("comment-author")))
                     .find(Name("a"))
@@ -294,7 +301,6 @@ impl<'a> TClient<'a> {
                     parent: parent,
                 });
             }
-        }
         return Ok(ret);
     }
 
