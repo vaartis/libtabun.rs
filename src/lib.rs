@@ -266,41 +266,41 @@ impl<'a> TClient<'a> {
 
         let comments = page.find(And(Name("div"),Class("comments")));
 
-            for comm in comments.find(Class("comment")).iter() {
-                let mut parent = 0i64;
-                if comm.parent().unwrap().parent().unwrap().is(And(Name("div"),Class("comment-wrapper"))) {
-                    let p = comm.find(And(Name("li"),Class("vote"))).first().unwrap();
-                    parent = p.attr("id").unwrap().split("_").collect::<Vec<_>>()[3].parse::<i64>().unwrap();
-                }
-
-                let text = comm.find(And(Name("div"),Class("text"))).first().unwrap().inner_html();
-                let text = text.as_str();
-
-                let id = comm.find(And(Name("li"),Class("vote"))).first().unwrap();
-                let id = id.attr("id").unwrap().split("_").collect::<Vec<_>>()[3].parse::<i64>().unwrap();
-
-                let author = comm.find(And(Name("li"),Class("comment-author")))
-                    .find(Name("a"))
-                    .first()
-                    .unwrap();
-                let author = author.attr("href").unwrap().split("/").collect::<Vec<_>>()[4];
-
-                let date = comm.find(Name("time")).first().unwrap();
-                let date = date.attr("datetime").unwrap();
-
-                let votes = comm.find(And(Name("span"),Class("vote-count")))
-                    .first()
-                    .unwrap()
-                    .text().parse::<i32>().unwrap();
-                ret.insert(id,Comment{
-                    body:   text.to_owned(),
-                    id:     id,
-                    author: author.to_owned(),
-                    date:   date.to_owned(),
-                    votes:  votes,
-                    parent: parent,
-                });
+        for comm in comments.find(Class("comment")).iter() {
+            let mut parent = 0i64;
+            if comm.parent().unwrap().parent().unwrap().is(And(Name("div"),Class("comment-wrapper"))) {
+                let p = comm.find(And(Name("li"),Class("vote"))).first().unwrap();
+                parent = p.attr("id").unwrap().split("_").collect::<Vec<_>>()[3].parse::<i64>().unwrap();
             }
+
+            let text = comm.find(And(Name("div"),Class("text"))).first().unwrap().inner_html();
+            let text = text.as_str();
+
+            let id = comm.find(And(Name("li"),Class("vote"))).first().unwrap();
+            let id = id.attr("id").unwrap().split("_").collect::<Vec<_>>()[3].parse::<i64>().unwrap();
+
+            let author = comm.find(And(Name("li"),Class("comment-author")))
+                .find(Name("a"))
+                .first()
+                .unwrap();
+            let author = author.attr("href").unwrap().split("/").collect::<Vec<_>>()[4];
+
+            let date = comm.find(Name("time")).first().unwrap();
+            let date = date.attr("datetime").unwrap();
+
+            let votes = comm.find(And(Name("span"),Class("vote-count")))
+                .first()
+                .unwrap()
+                .text().parse::<i32>().unwrap();
+            ret.insert(id,Comment{
+                body:   text.to_owned(),
+                id:     id,
+                author: author.to_owned(),
+                date:   date.to_owned(),
+                votes:  votes,
+                parent: parent,
+            });
+        }
         return Ok(ret);
     }
 
