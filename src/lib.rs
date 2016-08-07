@@ -121,8 +121,8 @@ impl<'a> TClient<'a> {
     pub fn new(login: &str, pass: &str) -> Result<TClient<'a>,TabunError> {
         if login == "" || pass == "" {
             return Ok(TClient{
-                name:               "".to_owned(),
-                security_ls_key:    "".to_owned(),
+                name:               String::new(),
+                security_ls_key:    String::new(),
                 client:             Client::new(),
                 cookies:            CookieJar::new(time::now().to_timespec().sec.to_string().as_bytes()),
             });
