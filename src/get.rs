@@ -243,6 +243,14 @@ impl<'a> TClient<'a> {
         })
     }
 
+    ///Получает инфу о пользователе,
+    ///если указан как "", то получает инфу о
+    ///текущем пользователе
+    ///
+    ///# Examples
+    ///```no_run
+    ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    ///user.get_profile("Orhideous");
     pub fn get_profile(&mut self, name: &str) -> Result<UserInfo,TabunError> {
         let name = if name.is_empty() { self.name.clone() } else { name.to_string() };
         println!("{}",name);
