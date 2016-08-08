@@ -1,4 +1,4 @@
-use ::{TClient,TabunError,Comment,EditablePost,Post};
+use ::{TClient,TabunError,Comment,EditablePost,Post,InBlogs,UserInfo};
 
 use std::collections::HashMap;
 use select::predicate::{Class, Name, And, Attr};
@@ -17,7 +17,7 @@ impl<'a> TClient<'a> {
     pub fn get_comments(&mut self,blog: &str, post_id: i32) -> Result<HashMap<i64,Comment>,TabunError> {
         let mut ret = HashMap::new();
 
-        let ref url = if blog == "" && post_id == 0 {
+        let ref url = if blog.is_empty() && post_id == 0 {
             "/comments".to_owned()
         } else {
             format!("/blog/{}/{}.html", blog, post_id)
@@ -190,7 +190,7 @@ impl<'a> TClient<'a> {
     ///user.get_post("",157198);
     ///```
     pub fn get_post(&mut self,blog_name: &str,post_id: i32) -> Result<Post,TabunError>{
-        let res = if blog_name == "" {
+        let res = if blog_name.is_empty() {
             try!(self.get(&format!("/blog/{}.html",post_id)))
         } else {
             try!(self.get(&format!("/blog/{}/{}.html",blog_name,post_id)))
@@ -240,6 +240,141 @@ impl<'a> TClient<'a> {
             comments_count: cm_count,
             author:         post_author,
             id:             post_id,
+        })
+    }
+
+    pub fn get_profile(&mut self, name: &str) -> Result<UserInfo,TabunError> {
+        let name = if name.is_empty() { self.name.clone() } else { name.to_string() };
+        println!("{}",name);
+
+        let full_url = format!("/profile/{}", name);
+        let page = try!(self.get(&full_url));
+        let profile = page.find(And(Name("div"),Class("profile")));
+
+        let username = profile.find(And(Name("h2"),Attr("itemprop","nickname")))
+            .first()
+            .unwrap()
+            .text();
+
+        let realname = match profile.find(And(Name("p"),Attr("itemprop","name")))
+            .first() {
+                Some(x) => x.text(),
+                None => String::new()
+            };
+
+        let skill_area = profile.find(And(Name("div"),Class("strength")))
+            .find(Name("div"))
+            .first()
+            .unwrap();
+        let skill = skill_area
+            .text()
+            .parse::<f32>()
+            .unwrap();
+
+        let user_id = skill_area
+            .attr("id")
+            .unwrap()
+            .split("_")
+            .collect::<Vec<_>>()[2]
+            .parse::<i32>()
+            .unwrap();
+
+        let rating = profile.find(Class("vote-count"))
+            .find(Name("span"))
+            .first()
+            .unwrap()
+            .text()
+            .parse::<f32>().unwrap();
+
+        let about = page.find(And(Name("div"),Class("profile-info-about")))
+            .first()
+            .unwrap();
+
+        let userpic = about.find(Class("avatar"))
+            .find(Name("img"))
+            .first()
+            .unwrap();
+        let userpic = userpic
+            .attr("src")
+            .unwrap();
+
+        let description = about.find(And(Name("div"),Class("text")))
+            .first()
+            .unwrap()
+            .inner_html();
+
+        let dotted = page.find(And(Name("ul"), Class("profile-dotted-list")));
+        let dotted = dotted.iter().last().unwrap().find(Name("li"));
+
+        let mut other_info = HashMap::<String,String>::new();
+
+        let mut created = Vec::<String>::new();
+        let mut admin = Vec::<String>::new();
+        let mut moderator = Vec::<String>::new();
+        let mut member= Vec::<String>::new();
+
+        for li in dotted.iter() {
+            let name = li.find(Name("span")).first().unwrap().text();
+            let val = li.find(Name("strong")).first().unwrap();
+
+            if name.contains("Создал"){
+                created = val.find(Name("a")).iter().map(|x| x.text()).collect::<Vec<_>>();
+            } else if name.contains("Администрирует") {
+                admin = val.find(Name("a")).iter().map(|x| x.text()).collect::<Vec<_>>();
+            } else if name.contains("Модерирует") {
+                moderator = val.find(Name("a")).iter().map(|x| x.text()).collect::<Vec<_>>();
+            } else if name.contains("Состоит") {
+                member = val.find(Name("a")).iter().map(|x| x.text()).collect::<Vec<_>>();
+            } else {
+                other_info.insert(name.replace(":",""),val.text());
+            }
+        }
+
+        let blogs = InBlogs{
+            created: created,
+            admin: admin,
+            moderator: moderator,
+            member: member
+        };
+
+        let nav = page.find(Class("nav-profile")).find(Name("li"));
+
+        let (mut publications,mut favourites, mut friends) = (0,0,0);
+
+        for li in nav.iter() {
+            let a = li.find(Name("a")).first().unwrap().text();
+
+            if !a.contains("Инфо") {
+                 let a = a.split("(").collect::<Vec<_>>();
+                 if a.len() >1 {
+                     let val = a[1].to_string()
+                         .replace(")","")
+                         .parse::<i32>()
+                         .unwrap();
+                     if a[0].contains(&"Публикации") {
+                         publications = val
+                     } else if a[0].contains(&"Избранное") {
+                         favourites = val
+                     } else {
+                         friends = val
+                     }
+                 }
+            }
+        }
+
+        Ok(UserInfo{
+            username:       username,
+            realname:       realname,
+            skill:          skill,
+            id:             user_id,
+            rating:         rating,
+            userpic:        userpic.to_owned(),
+            description:    description,
+            other_info:     other_info,
+            blogs:          blogs,
+            publications:   publications,
+            favourites:     favourites,
+            friends:        friends
         })
     }
 }

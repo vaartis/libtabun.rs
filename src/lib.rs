@@ -99,6 +99,54 @@ pub struct EditablePost {
     pub tags:           Vec<String>,
 }
 
+#[derive(Debug,Clone)]
+pub struct InBlogs {
+    ///Созданные пользователем блоги
+    created: Vec<String>,
+
+    ///Блоги, в которых пользователь является администратором
+    admin: Vec<String>,
+
+    ///Блоги, в которых пользователь является модератором
+    moderator: Vec<String>,
+
+    ///Блоги, в которых пользователь состоит
+    member: Vec<String>
+}
+
+#[derive(Debug,Clone)]
+pub struct UserInfo {
+    pub username:       String,
+    pub realname:       String,
+
+    ///Силушка
+    pub skill:          f32,
+    pub id:             i32,
+
+    ///Кармочка
+    pub rating:         f32,
+ 
+    ///URL картинки, иногда с `//`, иногда с `https://`
+    pub userpic:        String,
+    pub description:    String,
+
+    ///Информация вроде даты рождения и последнего визита,
+    ///поля называются как на сайте
+    pub other_info:     HashMap<String,String>,
+
+    ///Блоги, которые юзер создал/состоит в них/модерирует
+    pub blogs:          InBlogs,
+
+    ///Кол-во публикаций
+    pub publications:   i32,
+
+    ///Кол-во избранного
+    pub favourites:     i32,
+
+    ///Кол-во друзей
+    pub friends:        i32
+}
+
 impl Display for Comment {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "Comment({},\"{}\",\"{}\")", self.id, self.author, self.body)
@@ -108,6 +156,12 @@ impl Display for Comment {
 impl Display for Post {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "Post({},\"{}\",\"{}\")", self.id, self.author, self.body)
+    }
+}
+
+impl Display for UserInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "UserInfo({},\"{}\",\"{}\")", self.username, self.skill, self.rating)
     }
 }
 
@@ -124,7 +178,7 @@ impl<'a> TClient<'a> {
     ///let mut user = libtabun::TClient::new("логин","пароль");
     ///```
     pub fn new(login: &str, pass: &str) -> Result<TClient<'a>,TabunError> {
-        if login == "" || pass == "" {
+        if login.is_empty() || pass.is_empty() {
             return Ok(TClient{
                 name:               String::new(),
                 security_ls_key:    String::new(),
