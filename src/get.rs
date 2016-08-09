@@ -12,7 +12,7 @@ impl<'a> TClient<'a> {
     ///# Examples
     ///```no_run
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
-    ///user.get_comments("lighthouse",157807);
+    ///user.get_comments("/blog/lighthouse/157807.html");
     ///```
     pub fn get_comments(&mut self,url: &str) -> Result<HashMap<i64,Comment>,TabunError> {
         let mut ret = HashMap::new();
@@ -398,6 +398,12 @@ impl<'a> TClient<'a> {
         })
     }
 
+    ///Получает личный диалог по его ID
+    ///
+    ///# Examples
+    ///```no_run
+    ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    ///user.get_talk(123);
     pub fn get_talk(&mut self, talk_id: i32) -> Result<Talk,TabunError>{
         let url = format!("/talk/read/{}", talk_id);
         let page = try!(self.get(&url));

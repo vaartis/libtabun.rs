@@ -12,7 +12,7 @@ impl<'a> TClient<'a> {
     ///# Examples
     ///```no_run
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
-    ///user.comment(1234,"Привет!",0);
+    ///user.comment(1234,"Привет!", 0, libtabun::CommentType::Post);
     ///```
     pub fn comment(&mut self,post_id: i32, body : &str, reply: i32, typ: CommentType) -> Result<i64,TabunError>{
         use mdo::option::{bind};
