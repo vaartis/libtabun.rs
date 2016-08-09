@@ -1,4 +1,4 @@
-use ::{TClient,TabunError,Comment,EditablePost,Post,InBlogs,UserInfo};
+use ::{TClient,TabunError,Comment,EditablePost,Post,InBlogs,UserInfo,Talk};
 
 use std::collections::HashMap;
 use select::predicate::{Class, Name, And, Attr};
@@ -14,13 +14,19 @@ impl<'a> TClient<'a> {
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.get_comments("lighthouse",157807);
     ///```
-    pub fn get_comments(&mut self,blog: &str, post_id: i32) -> Result<HashMap<i64,Comment>,TabunError> {
+    pub fn get_comments(&mut self,url: &str) -> Result<HashMap<i64,Comment>,TabunError> {
         let mut ret = HashMap::new();
+        let mut url = url.to_string();
 
-        let ref url = if blog.is_empty() && post_id == 0 {
+        let ref url = if url.is_empty() {
             "/comments".to_owned()
         } else {
-            format!("/blog/{}/{}.html", blog, post_id)
+            if !url.starts_with("/") {
+                let old_url = url.clone();
+                url = "/".to_owned();
+                url.push_str(&old_url);
+            }
+            url
         };
 
         let page = try!(self.get(url));
@@ -28,17 +34,22 @@ impl<'a> TClient<'a> {
         let comments = page.find(And(Name("div"),Class("comments")));
 
         for comm in comments.find(Class("comment")).iter() {
-            let mut parent = 0i64;
-            if comm.parent().unwrap().parent().unwrap().is(And(Name("div"),Class("comment-wrapper"))) {
-                let p = comm.find(And(Name("li"),Class("vote"))).first().unwrap();
-                parent = p.attr("id").unwrap().split("_").collect::<Vec<_>>()[3].parse::<i64>().unwrap();
-            }
+            let parent = if comm.parent().unwrap().parent().unwrap().is(And(Name("div"),Class("comment-wrapper"))) {
+                match comm.find(And(Name("li"),Class("vote"))).first() {
+                    Some(x) => x.attr("id").unwrap().split("_").collect::<Vec<_>>()[3].parse::<i64>().unwrap(),
+                    None => comm.attr("id").unwrap().split("_").collect::<Vec<_>>()[2].parse::<i64>().unwrap()
+                }
+            } else {
+                0i64
+            };
 
             let text = comm.find(And(Name("div"),Class("text"))).first().unwrap().inner_html();
             let text = text.as_str();
 
-            let id = comm.find(And(Name("li"),Class("vote"))).first().unwrap();
-            let id = id.attr("id").unwrap().split("_").collect::<Vec<_>>()[3].parse::<i64>().unwrap();
+            let id = match comm.find(And(Name("li"),Class("vote"))).first() {
+                Some(x) => x.attr("id").unwrap().split("_").collect::<Vec<_>>()[3].parse::<i64>().unwrap(),
+                None => comm.attr("id").unwrap().split("_").collect::<Vec<_>>()[2].parse::<i64>().unwrap()
+            };
 
             let author = comm.find(And(Name("li"),Class("comment-author")))
                 .find(Name("a"))
@@ -49,10 +60,11 @@ impl<'a> TClient<'a> {
             let date = comm.find(Name("time")).first().unwrap();
             let date = date.attr("datetime").unwrap();
 
-            let votes = comm.find(And(Name("span"),Class("vote-count")))
-                .first()
-                .unwrap()
-                .text().parse::<i32>().unwrap();
+            let votes = match comm.find(And(Name("span"),Class("vote-count"))).first() {
+                Some(x) => x.text().parse::<i32>().unwrap(),
+                None    => 0
+            };
+
             ret.insert(id,Comment{
                 body:   text.to_owned(),
                 id:     id,
@@ -383,6 +395,47 @@ impl<'a> TClient<'a> {
             publications:   publications,
             favourites:     favourites,
             friends:        friends
+        })
+    }
+
+    pub fn get_talk(&mut self, talk_id: i32) -> Result<Talk,TabunError>{
+        let url = format!("/talk/read/{}", talk_id);
+        let page = try!(self.get(&url));
+
+        let title = page.find(Class("topic-title"))
+            .first()
+            .unwrap()
+            .text();
+
+        let body = page.find(Class("topic-content"))
+            .first()
+            .unwrap()
+            .inner_html();
+        let body = body.trim().to_string();
+
+        let date = page.find(And(Name("li"),Class("topic-info-date")))
+            .find(Name("time"))
+            .first()
+            .unwrap();
+        let date = date.attr("datetime")
+            .unwrap()
+            .to_string();
+
+        let comments = try!(self.get_comments(&url));
+
+        let users = page.find(Class("talk-recipients-header"))
+            .find(Name("a"))
+            .iter()
+            .filter(|x| x.attr("class").unwrap().contains("username"))
+            .map(|x| x.text().to_string())
+            .collect::<Vec<_>>();
+
+        Ok(Talk{
+            title:      title,
+            body:       body,
+            comments:   comments,
+            users:      users,
+            date:       date
         })
     }
 }

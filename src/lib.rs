@@ -42,6 +42,8 @@ macro_rules! map(
 mod add;
 mod get;
 
+//Перечисления
+
 #[derive(Debug)]
 pub enum TabunError {
     ///На случай `Hacking attempt!`
@@ -57,11 +59,15 @@ pub enum TabunError {
     NumError(StatusCode)
 }
 
-impl From<StatusCode> for TabunError {
-    fn from(x: StatusCode) -> Self {
-        TabunError::NumError(x)
-    }
+pub enum CommentType {
+    ///Комментарий к посту
+    Post,
+
+    ///Ответ на личное сообщение
+    Talk
 }
+
+//Структуры
 
 ///Клиент табуна
 pub struct TClient<'a> {
@@ -145,6 +151,26 @@ pub struct UserInfo {
 
     ///Кол-во друзей
     pub friends:        i32
+}
+
+///Диалог в личных сообщениях
+#[derive(Debug,Clone)]
+pub struct Talk {
+    pub title:  String,
+    pub body:   String,
+
+    ///Участники
+    pub users:  Vec<String>,
+    pub comments: HashMap<i64, Comment>,
+    pub date:   String
+}
+
+//Реализации
+
+impl From<StatusCode> for TabunError {
+    fn from(x: StatusCode) -> Self {
+        TabunError::NumError(x)
+    }
 }
 
 impl Display for Comment {
