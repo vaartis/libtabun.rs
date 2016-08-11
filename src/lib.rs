@@ -360,4 +360,22 @@ impl<'a> TClient<'a> {
 
         let _ = self.multipart("/subscribe/ajax-subscribe-toggle",body);
     }
+
+    ///Загружает картинку по URL, попутно вычищая табуновские бэкслэши из ответа
+    pub fn upload_image_from_url(&mut self, url: &str) -> Result<String,TabunError>{
+        let key = self.security_ls_key.clone();
+        let url_regex = Regex::new(r"img src=\\&quot;(.+)\\&quot;").unwrap();
+        let mut res_s = String::new();
+        let mut res = try!(self.multipart("/ajax/upload/image", map!["title" => "", "img_url" => url, "security_ls_key" => &key]));
+        let _ = res.read_to_string(&mut res_s);
+        match url_regex.captures(&res_s) {
+            Some(x) => Ok(x.at(1).unwrap().to_owned()),
+            None    => {
+                        let err_regex = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"").unwrap();
+                        let s = res_s.clone();
+                        let err = err_regex.captures(&s).unwrap();
+                        Err(TabunError::Error(err.at(1).unwrap().to_owned(),err.at(2).unwrap().to_owned()))
+            }
+        }
+    }
 }
