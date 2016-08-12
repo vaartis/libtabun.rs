@@ -40,7 +40,7 @@ impl<'a> TClient<'a> {
                     None => comm.attr("id").unwrap().split("_").collect::<Vec<_>>()[2].parse::<i64>().unwrap()
                 }
             } else {
-                0i64
+                0_i64
             };
 
             let text = comm.find(And(Name("div"),Class("text"))).first().unwrap().inner_html();
@@ -113,56 +113,56 @@ impl<'a> TClient<'a> {
        let mut ret = Vec::new();
 
        for p in res.find(Name("article")).iter() {
-        let post_id = p.find(And(Name("div"),Class("vote-topic")))
+           let post_id = p.find(And(Name("div"),Class("vote-topic")))
                .first()
                .unwrap()
                .attr("id")
                .unwrap()
                .split("_").collect::<Vec<_>>()[3].parse::<i32>().unwrap();
 
-        let post_title = p.find(And(Name("h1"),Class("topic-title")))
-            .first()
-            .unwrap()
-            .text();
+           let post_title = p.find(And(Name("h1"),Class("topic-title")))
+               .first()
+               .unwrap()
+               .text();
 
-        let post_body = p.find(And(Name("div"),Class("topic-content")))
-            .first()
-            .unwrap()
-            .inner_html();
-        let post_body = post_body.trim();
+           let post_body = p.find(And(Name("div"),Class("topic-content")))
+               .first()
+               .unwrap()
+               .inner_html();
+           let post_body = post_body.trim();
 
-        let post_date = p.find(And(Name("li"),Class("topic-info-date")))
-            .find(Name("time"))
-            .first()
-            .unwrap();
-        let post_date = post_date.attr("datetime")
-            .unwrap();
+           let post_date = p.find(And(Name("li"),Class("topic-info-date")))
+               .find(Name("time"))
+               .first()
+               .unwrap();
+           let post_date = post_date.attr("datetime")
+               .unwrap();
 
-        let mut post_tags = Vec::new();
-        for t in res.find(And(Name("a"),Attr("rel","tag"))).iter() {
-            post_tags.push(t.text());
-        }
+           let mut post_tags = Vec::new();
+           for t in res.find(And(Name("a"),Attr("rel","tag"))).iter() {
+               post_tags.push(t.text());
+           }
 
-        let cm_count = p.find(And(Name("li"),Class("topic-info-comments")))
-            .first()
-            .unwrap()
-            .find(Name("span")).first().unwrap().text()
-            .parse::<i32>().unwrap();
+           let cm_count = p.find(And(Name("li"),Class("topic-info-comments")))
+               .first()
+               .unwrap()
+               .find(Name("span")).first().unwrap().text()
+               .parse::<i32>().unwrap();
 
-        let post_author = res.find(And(Name("div"),Class("topic-info")))
-            .find(And(Name("a"),Attr("rel","author")))
-            .first()
-            .unwrap()
-            .text();
-        ret.push(
-            Post{
-                title:          post_title,
-                body:           post_body.to_owned(),
-                date:           post_date.to_owned(),
-                tags:           post_tags,
-                comments_count: cm_count,
-                author:         post_author,
-                id:             post_id, });
+           let post_author = res.find(And(Name("div"),Class("topic-info")))
+               .find(And(Name("a"),Attr("rel","author")))
+               .first()
+               .unwrap()
+               .text();
+           ret.push(
+               Post{
+                   title:          post_title,
+                   body:           post_body.to_owned(),
+                   date:           post_date.to_owned(),
+                   tags:           post_tags,
+                   comments_count: cm_count,
+                   author:         post_author,
+                   id:             post_id, });
        }
        Ok(ret)
     }
