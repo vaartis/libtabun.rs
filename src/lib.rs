@@ -309,17 +309,14 @@ impl<'a> TClient<'a> {
         let blog_id = blog_id.to_string();
         let key = self.security_ls_key.clone();
         let forbid_comment = if forbid_comment == true { "1" } else { "0" };
-        let mut rtags = String::new();
-        for i in tags {
-            rtags += &format!("{},", i);
-        }
+        let tags = tags.iter().fold(String::new(), |acc, ref x| acc + &format!("{},", x));
 
         let bd = map![
             "topic_type"            =>  "topic",
             "blog_id"               =>  &blog_id,
             "topic_title"           =>  title,
             "topic_text"            =>  body,
-            "topic_tags"            =>  &rtags,
+            "topic_tags"            =>  &tags,
             "submit_topic_publish"  =>  "Опубликовать",
             "security_ls_key"       =>  &key,
             "topic_forbid_comment"  =>  &forbid_comment
