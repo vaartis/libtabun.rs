@@ -19,7 +19,7 @@ impl<'a> TClient<'a> {
     ///user.add_post(blog_id,"Название поста","Текст поста",vec!["тэг раз","тэг два"]);
     ///```
     pub fn add_post(&mut self, blog_id: i32, title: &str, body: &str, tags: Vec<&str>) -> Result<i32,TabunError> {
-        use mdo::option::{bind};
+        use mdo::option::bind;
 
         let blog_id = blog_id.to_string();
         let key = self.security_ls_key.clone();

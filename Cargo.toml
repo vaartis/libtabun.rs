@@ -1,6 +1,6 @@
 [package]
 name = "libtabun"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["TyanNN <tyannn@cocaine.ninja>"]
 
 [dependencies]

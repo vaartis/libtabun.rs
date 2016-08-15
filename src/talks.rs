@@ -1,6 +1,13 @@
+extern crate regex;
+
 use ::{TClient,TabunError,Talk};
 
 use select::predicate::{Class, Name, And};
+
+use std::str;
+
+use regex::Regex;
+
 
 impl<'a> TClient<'a> {
 
@@ -49,5 +56,37 @@ impl<'a> TClient<'a> {
             users:      users,
             date:       date
         })
+    }
+
+    ///Создаёт личный диалог с пользователями
+    ///
+    ///# Examples
+    ///```no_run
+    ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    ///user.add_talk(vec!["человек1","человек2"], "Название", "Текст");
+    pub fn add_talk(&mut self, users: Vec<&str>, title: &str, body:&str) -> Result<i32,TabunError> {
+        use mdo::option::bind;
+
+        let users = users.iter().fold(String::new(),|mut acc, x| { acc.push_str(&format!("{}, ", *x)); acc });
+        let key = self.security_ls_key.clone();
+
+        let fields = map![
+            "submit_talk_add" => "Отправить",
+            "security_ls_key" => &key,
+            "talk_users" => &users,
+            "talk_title" => &title,
+            "talk_text" => &body
+        ];
+
+        let res = try!(self.multipart("/talk/add",fields));
+
+        let r = str::from_utf8(&res.headers.get_raw("location").unwrap()[0]).unwrap();
+
+        Ok(mdo!(
+                regex       =<< Regex::new(r"read/(\d+)/$").ok();
+                captures    =<< regex.captures(r);
+                r           =<< captures.at(1);
+                ret r.parse::<i32>().ok()
+               ).unwrap())
     }
 }
