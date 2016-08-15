@@ -18,16 +18,16 @@ impl<'a> TClient<'a> {
         let mut ret = HashMap::new();
         let mut url = url.to_string();
 
-        let ref url = if url.is_empty() {
+        let url = &(if url.is_empty() {
             "/comments".to_owned()
         } else {
-            if !url.starts_with("/") {
+            if !url.starts_with('/') {
                 let old_url = url.clone();
                 url = "/".to_owned();
                 url.push_str(&old_url);
             }
             url
-        };
+        });
 
         let page = try!(self.get(url));
 
@@ -36,8 +36,8 @@ impl<'a> TClient<'a> {
         for comm in comments.find(Class("comment")).iter() {
             let parent = if comm.parent().unwrap().parent().unwrap().is(And(Name("div"),Class("comment-wrapper"))) {
                 match comm.find(And(Name("li"),Class("vote"))).first() {
-                    Some(x) => x.attr("id").unwrap().split("_").collect::<Vec<_>>()[3].parse::<i64>().unwrap(),
-                    None => comm.attr("id").unwrap().split("_").collect::<Vec<_>>()[2].parse::<i64>().unwrap()
+                    Some(x) => x.attr("id").unwrap().split('_').collect::<Vec<_>>()[3].parse::<i64>().unwrap(),
+                    None => comm.attr("id").unwrap().split('_').collect::<Vec<_>>()[2].parse::<i64>().unwrap()
                 }
             } else {
                 0_i64
@@ -47,15 +47,15 @@ impl<'a> TClient<'a> {
             let text = text.as_str();
 
             let id = match comm.find(And(Name("li"),Class("vote"))).first() {
-                Some(x) => x.attr("id").unwrap().split("_").collect::<Vec<_>>()[3].parse::<i64>().unwrap(),
-                None => comm.attr("id").unwrap().split("_").collect::<Vec<_>>()[2].parse::<i64>().unwrap()
+                Some(x) => x.attr("id").unwrap().split('_').collect::<Vec<_>>()[3].parse::<i64>().unwrap(),
+                None => comm.attr("id").unwrap().split('_').collect::<Vec<_>>()[2].parse::<i64>().unwrap()
             };
 
             let author = comm.find(And(Name("li"),Class("comment-author")))
                 .find(Name("a"))
                 .first()
                 .unwrap();
-            let author = author.attr("href").unwrap().split("/").collect::<Vec<_>>()[4];
+            let author = author.attr("href").unwrap().split('/').collect::<Vec<_>>()[4];
 
             let date = comm.find(Name("time")).first().unwrap();
             let date = date.attr("datetime").unwrap();
@@ -74,7 +74,7 @@ impl<'a> TClient<'a> {
                 parent: parent,
             });
         }
-        return Ok(ret);
+        Ok(ret)
     }
 
     ///Получает ID блога по его имени
@@ -118,7 +118,7 @@ impl<'a> TClient<'a> {
                .unwrap()
                .attr("id")
                .unwrap()
-               .split("_").collect::<Vec<_>>()[3].parse::<i32>().unwrap();
+               .split('_').collect::<Vec<_>>()[3].parse::<i32>().unwrap();
 
            let post_title = p.find(And(Name("h1"),Class("topic-title")))
                .first()
@@ -182,7 +182,7 @@ impl<'a> TClient<'a> {
 
         let tags = res.find(Attr("id","topic_tags")).first().unwrap();
         let tags = tags.attr("value").unwrap();
-        let tags = tags.split(",").map(|x| x.to_string()).collect::<Vec<String>>();
+        let tags = tags.split(',').map(|x| x.to_string()).collect::<Vec<String>>();
 
         Ok(EditablePost{
             title:  title,
@@ -294,7 +294,7 @@ impl<'a> TClient<'a> {
         let user_id = skill_area
             .attr("id")
             .unwrap()
-            .split("_")
+            .split('_')
             .collect::<Vec<_>>()[2]
             .parse::<i32>()
             .unwrap();
@@ -365,7 +365,7 @@ impl<'a> TClient<'a> {
             let a = li.find(Name("a")).first().unwrap().text();
 
             if !a.contains("Инфо") {
-                 let a = a.split("(").collect::<Vec<_>>();
+                 let a = a.split('(').collect::<Vec<_>>();
                  if a.len() >1 {
                      let val = a[1].to_string()
                          .replace(")","")

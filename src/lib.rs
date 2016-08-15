@@ -216,7 +216,6 @@ impl<'a> TClient<'a> {
         let mut user = TClient::new("","").unwrap();
 
         let err_regex = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"").unwrap();
-        let hacking_regex = Regex::new("Hacking").unwrap();
 
         let ls_key_regex = Regex::new(r"LIVESTREET_SECURITY_KEY = '(.+)'").unwrap();
 
@@ -235,7 +234,7 @@ impl<'a> TClient<'a> {
         let res = res.as_str();
 
 
-        if hacking_regex.is_match(res) {
+        if res.contains("Hacking") {
             Err(TabunError::HackingAttempt)
         } else if err_regex.is_match(res) {
             let err = err_regex.captures(res).unwrap();
@@ -249,7 +248,7 @@ impl<'a> TClient<'a> {
         }
     }
 
-    fn get(&mut self,url: &String) -> Result<Document,StatusCode>{
+    fn get(&mut self,url: &str) -> Result<Document,StatusCode>{
         let full_url = format!("{}{}", HOST_URL, url);
 
         let mut res = self.client.get(
@@ -308,8 +307,8 @@ impl<'a> TClient<'a> {
 
         let blog_id = blog_id.to_string();
         let key = self.security_ls_key.clone();
-        let forbid_comment = if forbid_comment == true { "1" } else { "0" };
-        let tags = tags.iter().fold(String::new(), |acc, ref x| acc + &format!("{},", x));
+        let forbid_comment = if forbid_comment { "1" } else { "0" };
+        let tags = tags.iter().fold(String::new(), |acc, x| acc + &format!("{},", *x));
 
         let bd = map![
             "topic_type"            =>  "topic",
@@ -342,7 +341,7 @@ impl<'a> TClient<'a> {
     ///user.comments_subscribe(157198,false);
     ///```
     pub fn comments_subscribe(&mut self, post_id: i32, subscribed: bool) {
-        let subscribed = if subscribed == true { "1" } else { "0" };
+        let subscribed = if subscribed { "1" } else { "0" };
 
         let post_id = post_id.to_string();
         let key = self.security_ls_key.clone();
