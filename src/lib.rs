@@ -109,16 +109,16 @@ pub struct EditablePost {
 #[derive(Debug,Clone)]
 pub struct InBlogs {
     ///Созданные пользователем блоги
-    created: Vec<String>,
+    pub created: Vec<String>,
 
     ///Блоги, в которых пользователь является администратором
-    admin: Vec<String>,
+    pub admin: Vec<String>,
 
     ///Блоги, в которых пользователь является модератором
-    moderator: Vec<String>,
+    pub moderator: Vec<String>,
 
     ///Блоги, в которых пользователь состоит
-    member: Vec<String>
+    pub member: Vec<String>
 }
 
 #[derive(Debug,Clone)]
