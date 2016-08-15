@@ -23,7 +23,7 @@ use multipart::client::Multipart;
 use std::io::Read;
 
 use select::document::Document;
-use select::predicate::{Class, Name};
+use select::predicate::{Class, Name, And, Attr};
 
 use cookie::CookieJar;
 
@@ -39,8 +39,9 @@ macro_rules! map(
      };
 );
 
-mod add;
-mod get;
+mod comments;
+mod posts;
+mod talks;
 
 //Перечисления
 
@@ -294,69 +295,6 @@ impl<'a> TClient<'a> {
         Ok(res)
     }
 
-    ///Редактирует пост
-    ///
-    ///# Examples
-    ///```no_run
-    ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
-    ///let blog_id = user.get_blog_id("computers").unwrap();
-    ///user.edit_post(157198,blog_id,"Новое название", "Новый текст", vec!["тэг".to_string()],false);
-    ///```
-    pub fn edit_post(&mut self, post_id: i32, blog_id: i32, title: &str, body: &str, tags: Vec<String>, forbid_comment: bool) -> Result<i32,TabunError> {
-        use mdo::option::{bind};
-
-        let blog_id = blog_id.to_string();
-        let key = self.security_ls_key.clone();
-        let forbid_comment = if forbid_comment { "1" } else { "0" };
-        let tags = tags.iter().fold(String::new(), |acc, x| acc + &format!("{},", *x));
-
-        let bd = map![
-            "topic_type"            =>  "topic",
-            "blog_id"               =>  &blog_id,
-            "topic_title"           =>  title,
-            "topic_text"            =>  body,
-            "topic_tags"            =>  &tags,
-            "submit_topic_publish"  =>  "Опубликовать",
-            "security_ls_key"       =>  &key,
-            "topic_forbid_comment"  =>  &forbid_comment
-        ];
-
-        let res = try!(self.multipart(&format!("/topic/edit/{}",post_id), bd));
-
-        let r = std::str::from_utf8(&res.headers.get_raw("location").unwrap()[0]).unwrap();
-
-        Ok(mdo!(
-            regex       =<< Regex::new(r"(\d+).html$").ok();
-            captures    =<< regex.captures(r);
-            r           =<< captures.at(1);
-            ret r.parse::<i32>().ok()
-        ).unwrap())
-    }
-
-    ///Подписаться/отписаться от комментариев к посту.
-    ///
-    ///# Examples
-    ///```no_run
-    ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
-    ///user.comments_subscribe(157198,false);
-    ///```
-    pub fn comments_subscribe(&mut self, post_id: i32, subscribed: bool) {
-        let subscribed = if subscribed { "1" } else { "0" };
-
-        let post_id = post_id.to_string();
-        let key = self.security_ls_key.clone();
-
-        let body = map![
-        "target_type"       =>  "topic_new_comment",
-        "target_id"         =>  post_id.as_str(),
-        "value"             =>  subscribed,
-        "mail"              =>  "",
-        "security_ls_key"   => &key
-        ];
-
-        let _ = self.multipart("/subscribe/ajax-subscribe-toggle",body);
-    }
-
     ///Загружает картинку по URL, попутно вычищая табуновские бэкслэши из ответа
     pub fn upload_image_from_url(&mut self, url: &str) -> Result<String,TabunError>{
         let key = self.security_ls_key.clone();
@@ -373,5 +311,172 @@ impl<'a> TClient<'a> {
                         Err(TabunError::Error(err.at(1).unwrap().to_owned(),err.at(2).unwrap().to_owned()))
             }
         }
+    }
+
+    ///Получает ID блога по его имени
+    ///
+    ///# Examples
+    ///```no_run
+    ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    ///let blog_id = user.get_blog_id("lighthouse").unwrap();
+    ///assert_eq!(blog_id,15558);
+    ///```
+    pub fn get_blog_id(&mut self,name: &str) -> Result<i32,TabunError> {
+        use mdo::option::{bind,ret};
+
+        let url = format!("/blog/{}", name);
+        let page = try!(self.get(&url));
+
+        Ok(mdo!(
+            x =<< page.find(And(Name("div"),Class("vote-item"))).first();
+            x =<< x.find(Name("span")).first();
+            x =<< x.attr("id");
+            x =<< x.split("_").collect::<Vec<_>>().last();
+            x =<< x.parse::<i32>().ok();
+            ret ret(x)
+        ).unwrap())
+    }
+
+    ///Получает инфу о пользователе,
+    ///если указан как "", то получает инфу о
+    ///текущем пользователе
+    ///
+    ///# Examples
+    ///```no_run
+    ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    ///user.get_profile("Orhideous");
+    pub fn get_profile(&mut self, name: &str) -> Result<UserInfo,TabunError> {
+        let name = if name.is_empty() { self.name.clone() } else { name.to_string() };
+        println!("{}",name);
+
+        let full_url = format!("/profile/{}", name);
+        let page = try!(self.get(&full_url));
+        let profile = page.find(And(Name("div"),Class("profile")));
+
+        let username = profile.find(And(Name("h2"),Attr("itemprop","nickname")))
+            .first()
+            .unwrap()
+            .text();
+
+        let realname = match profile.find(And(Name("p"),Attr("itemprop","name")))
+            .first() {
+                Some(x) => x.text(),
+                None => String::new()
+            };
+
+        let skill_area = profile.find(And(Name("div"),Class("strength")))
+            .find(Name("div"))
+            .first()
+            .unwrap();
+        let skill = skill_area
+            .text()
+            .parse::<f32>()
+            .unwrap();
+
+        let user_id = skill_area
+            .attr("id")
+            .unwrap()
+            .split('_')
+            .collect::<Vec<_>>()[2]
+            .parse::<i32>()
+            .unwrap();
+
+        let rating = profile.find(Class("vote-count"))
+            .find(Name("span"))
+            .first()
+            .unwrap()
+            .text()
+            .parse::<f32>().unwrap();
+
+        let about = page.find(And(Name("div"),Class("profile-info-about")))
+            .first()
+            .unwrap();
+
+        let userpic = about.find(Class("avatar"))
+            .find(Name("img"))
+            .first()
+            .unwrap();
+        let userpic = userpic
+            .attr("src")
+            .unwrap();
+
+        let description = about.find(And(Name("div"),Class("text")))
+            .first()
+            .unwrap()
+            .inner_html();
+
+        let dotted = page.find(And(Name("ul"), Class("profile-dotted-list")));
+        let dotted = dotted.iter().last().unwrap().find(Name("li"));
+
+        let mut other_info = HashMap::<String,String>::new();
+
+        let mut created = Vec::<String>::new();
+        let mut admin = Vec::<String>::new();
+        let mut moderator = Vec::<String>::new();
+        let mut member= Vec::<String>::new();
+
+        for li in dotted.iter() {
+            let name = li.find(Name("span")).first().unwrap().text();
+            let val = li.find(Name("strong")).first().unwrap();
+
+            if name.contains("Создал"){
+                created = val.find(Name("a")).iter().map(|x| x.text()).collect::<Vec<_>>();
+            } else if name.contains("Администрирует") {
+                admin = val.find(Name("a")).iter().map(|x| x.text()).collect::<Vec<_>>();
+            } else if name.contains("Модерирует") {
+                moderator = val.find(Name("a")).iter().map(|x| x.text()).collect::<Vec<_>>();
+            } else if name.contains("Состоит") {
+                member = val.find(Name("a")).iter().map(|x| x.text()).collect::<Vec<_>>();
+            } else {
+                other_info.insert(name.replace(":",""),val.text());
+            }
+        }
+
+        let blogs = InBlogs{
+            created: created,
+            admin: admin,
+            moderator: moderator,
+            member: member
+        };
+
+        let nav = page.find(Class("nav-profile")).find(Name("li"));
+
+        let (mut publications,mut favourites, mut friends) = (0,0,0);
+
+        for li in nav.iter() {
+            let a = li.find(Name("a")).first().unwrap().text();
+
+            if !a.contains("Инфо") {
+                 let a = a.split('(').collect::<Vec<_>>();
+                 if a.len() >1 {
+                     let val = a[1].to_string()
+                         .replace(")","")
+                         .parse::<i32>()
+                         .unwrap();
+                     if a[0].contains(&"Публикации") {
+                         publications = val
+                     } else if a[0].contains(&"Избранное") {
+                         favourites = val
+                     } else {
+                         friends = val
+                     }
+                 }
+            }
+        }
+
+        Ok(UserInfo{
+            username:       username,
+            realname:       realname,
+            skill:          skill,
+            id:             user_id,
+            rating:         rating,
+            userpic:        userpic.to_owned(),
+            description:    description,
+            other_info:     other_info,
+            blogs:          blogs,
+            publications:   publications,
+            favourites:     favourites,
+            friends:        friends
+        })
     }
 }
