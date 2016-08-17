@@ -1,9 +1,11 @@
 extern crate regex;
 extern crate select;
+extern crate hyper;
 
-use ::{TClient,TabunError,Post,EditablePost};
+use ::{TClient,TabunError,Post,EditablePost,HOST_URL};
 
 use select::predicate::{Name,Class,Attr,And};
+use hyper::header::Referer;
 
 use regex::Regex;
 use std::str;
@@ -241,5 +243,17 @@ impl<'a> TClient<'a> {
             r           =<< captures.at(1);
             ret r.parse::<i32>().ok()
         ).unwrap())
+    }
+
+    ///Удаляет пост, и, так как табун ничего не возаращет по этому поводу,
+    ///выдаёт Ok(true) в случае удачи
+    pub fn delete_post(&mut self, post_id: i32) -> Result<bool,TabunError> {
+        let url = format!("/topic/delete/{}/?security_ls_key={}", post_id ,&self.security_ls_key);
+        match self.create_middle_req(&url)
+            .header(Referer(format!("{}/blog/{}.html", HOST_URL, post_id)))
+            .send().unwrap().status {
+                hyper::Ok => Ok(true),
+                x @ _ => Err(TabunError::NumError(x))
+            }
     }
 }

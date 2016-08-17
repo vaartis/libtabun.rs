@@ -249,12 +249,16 @@ impl<'a> TClient<'a> {
         }
     }
 
-    fn get(&mut self,url: &str) -> Result<Document,StatusCode>{
+    ///Заметка себе: создаёт промежуточный объект запроса, сразу выставляя печеньки,
+    ///на случай если надо что-то поменять (как в delete_post)
+    fn create_middle_req(&mut self, url: &str) -> hyper::client::RequestBuilder {
         let full_url = format!("{}{}", HOST_URL, url);
-
-        let mut res = self.client.get(
-            &full_url)
+        self.client.get(&full_url)
             .header(Cookie::from_cookie_jar(&self.cookies))
+    }
+
+    fn get(&mut self,url: &str) -> Result<Document,StatusCode>{
+        let mut res = self.create_middle_req(url)
             .send()
             .unwrap();
 
