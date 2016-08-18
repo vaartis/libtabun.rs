@@ -111,7 +111,7 @@ impl<'a> TClient<'a> {
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.comment(1234,"Привет!", 0, libtabun::CommentType::Post);
     ///```
-    pub fn comment(&mut self,post_id: i32, body : &str, reply: i32, typ: CommentType) -> Result<i64,TabunError>{
+    pub fn comment(&mut self,post_id: i32, body : &str, reply: i64, typ: CommentType) -> Result<i64,TabunError>{
         use mdo::option::{bind};
 
         let id_regex = Regex::new("\"sCommentId\":(\\d+)").unwrap();
