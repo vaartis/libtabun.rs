@@ -1,6 +1,7 @@
 extern crate regex;
+extern crate hyper;
 
-use ::{TClient,TabunError,Talk};
+use ::{TClient,TabunError,Talk,HOST_URL};
 
 use select::predicate::{Class, Name, And};
 
@@ -8,6 +9,7 @@ use std::str;
 
 use regex::Regex;
 
+use hyper::header::Referer;
 
 impl<'a> TClient<'a> {
 
@@ -64,7 +66,7 @@ impl<'a> TClient<'a> {
     ///```no_run
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.add_talk(vec!["человек1","человек2"], "Название", "Текст");
-    pub fn add_talk(&mut self, users: Vec<&str>, title: &str, body:&str) -> Result<i32,TabunError> {
+    pub fn add_talk(&mut self, users: &Vec<&str>, title: &str, body:&str) -> Result<i32,TabunError> {
         use mdo::option::bind;
 
         let users = users.iter().fold(String::new(),|mut acc, x| { acc.push_str(&format!("{}, ", *x)); acc });
@@ -88,5 +90,17 @@ impl<'a> TClient<'a> {
                 r           =<< captures.at(1);
                 ret r.parse::<i32>().ok()
                ).unwrap())
+    }
+
+    ///Удаляет цепочку сообщений, и, так как табун ничего не возаращет по этому поводу,
+    ///выдаёт Ok(true) в случае удачи
+    pub fn delete_talk(&mut self, talk_id: i32) -> Result<bool,TabunError> {
+        let url = format!("/talk/delete/{}/?security_ls_key={}", talk_id ,&self.security_ls_key);
+        match self.create_middle_req(&url)
+            .header(Referer(format!("{}/talk/{}/", HOST_URL, talk_id)))
+            .send().unwrap().status {
+                hyper::Ok => Ok(true),
+                x @ _ => Err(TabunError::NumError(x))
+            }
     }
 }

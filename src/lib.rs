@@ -352,7 +352,6 @@ impl<'a> TClient<'a> {
     ///user.get_profile("Orhideous");
     pub fn get_profile(&mut self, name: &str) -> Result<UserInfo,TabunError> {
         let name = if name.is_empty() { self.name.clone() } else { name.to_string() };
-        println!("{}",name);
 
         let full_url = format!("/profile/{}", name);
         let page = try!(self.get(&full_url));
