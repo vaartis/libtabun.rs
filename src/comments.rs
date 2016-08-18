@@ -37,6 +37,8 @@ impl<'a> TClient<'a> {
 
         let comments = page.find(And(Name("div"),Class("comments")));
 
+        let url_regex = Regex::new(r"(\d+).html$").unwrap();
+
         for comm in comments.find(Class("comment")).iter() {
             let parent = match comm.find(Class("goto-comment-parent")).first() {
                 Some(x) => {
@@ -47,7 +49,6 @@ impl<'a> TClient<'a> {
             };
 
             let post_id = if url == "/comments" {
-                let url_regex = Regex::new(r"(\d+).html$").unwrap();
                 let c = comm.find(Class("comment-path-topic"))
                     .first()
                     .unwrap();
@@ -58,7 +59,6 @@ impl<'a> TClient<'a> {
                     .parse::<i32>()
                     .unwrap()
             } else {
-                let url_regex = Regex::new(r"(\d+).html$").unwrap();
                 url_regex.captures(url)
                     .unwrap()
                     .at(1)
