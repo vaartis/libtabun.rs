@@ -47,6 +47,27 @@ impl<'a> TClient<'a> {
                 0_i64
             };
 
+            let post_id = if url == "/comments" {
+                let url_regex = Regex::new(r"(\d+).html$").unwrap();
+                let c = comm.find(Class("comment-path-topic"))
+                    .first()
+                    .unwrap();
+                url_regex.captures(c.attr("href").unwrap())
+                    .unwrap()
+                    .at(1)
+                    .unwrap()
+                    .parse::<i32>()
+                    .unwrap()
+            } else {
+                let url_regex = Regex::new(r"(\d+).html$").unwrap();
+                url_regex.captures(url)
+                    .unwrap()
+                    .at(1)
+                    .unwrap()
+                    .parse::<i32>()
+                    .unwrap()
+            };
+
             let text = comm.find(And(Name("div"),Class("text"))).first().unwrap().inner_html();
             let text = text.as_str();
 
@@ -70,12 +91,13 @@ impl<'a> TClient<'a> {
             };
 
             ret.insert(id,Comment{
-                body:   text.to_owned(),
-                id:     id,
-                author: author.to_owned(),
-                date:   date.to_owned(),
-                votes:  votes,
-                parent: parent,
+                body:       text.to_owned(),
+                id:         id,
+                author:     author.to_owned(),
+                date:       date.to_owned(),
+                votes:      votes,
+                parent:     parent,
+                post_id:    post_id
             });
         }
         Ok(ret)

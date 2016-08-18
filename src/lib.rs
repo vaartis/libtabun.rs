@@ -80,12 +80,13 @@ pub struct TClient<'a> {
 
 #[derive(Debug,Clone)]
 pub struct Comment {
-    pub body:   String,
-    pub id:     i64,
-    pub author: String,
-    pub date:   String,
-    pub votes:  i32,
-    pub parent: i64,
+    pub body:       String,
+    pub id:         i64,
+    pub author:     String,
+    pub date:       String,
+    pub votes:      i32,
+    pub parent:     i64,
+    pub post_id:    i32
 }
 
 #[derive(Debug,Clone)]
