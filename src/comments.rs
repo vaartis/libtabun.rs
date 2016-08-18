@@ -38,13 +38,12 @@ impl<'a> TClient<'a> {
         let comments = page.find(And(Name("div"),Class("comments")));
 
         for comm in comments.find(Class("comment")).iter() {
-            let parent = if comm.parent().unwrap().parent().unwrap().is(And(Name("div"),Class("comment-wrapper"))) {
-                match comm.find(And(Name("li"),Class("vote"))).first() {
-                    Some(x) => x.attr("id").unwrap().split('_').collect::<Vec<_>>()[3].parse::<i64>().unwrap(),
-                    None => comm.attr("id").unwrap().split('_').collect::<Vec<_>>()[2].parse::<i64>().unwrap()
-                }
-            } else {
-                0_i64
+            let parent = match comm.find(Class("goto-comment-parent")).first() {
+                Some(x) => {
+                    let c = x.find(Name("a")).first().unwrap();
+                    let c = c.attr("href").unwrap().split('/').collect::<Vec<_>>();
+                    c[c.len()-1].parse::<i64>().unwrap() },
+                None => 0
             };
 
             let post_id = if url == "/comments" {
