@@ -20,7 +20,7 @@ impl<'a> TClient<'a> {
     ///let blog_id = user.get_blog_id("computers").unwrap();
     ///user.add_post(blog_id,"Название поста","Текст поста",vec!["тэг раз","тэг два"]);
     ///```
-    pub fn add_post(&mut self, blog_id: i32, title: &str, body: &str, tags: &Vec<&str>) -> Result<i32,TabunError> {
+    pub fn add_post(&mut self, blog_id: i32, title: &str, body: &str, tags: &[&str]) -> Result<i32,TabunError> {
         use mdo::option::bind;
 
         let blog_id = blog_id.to_string();
@@ -211,7 +211,7 @@ impl<'a> TClient<'a> {
     ///let blog_id = user.get_blog_id("computers").unwrap();
     ///user.edit_post(157198,blog_id,"Новое название", "Новый текст", vec!["тэг".to_string()],false);
     ///```
-    pub fn edit_post(&mut self, post_id: i32, blog_id: i32, title: &str, body: &str, tags: &Vec<String>, forbid_comment: bool) -> Result<i32,TabunError> {
+    pub fn edit_post(&mut self, post_id: i32, blog_id: i32, title: &str, body: &str, tags: &[String], forbid_comment: bool) -> Result<i32,TabunError> {
         use mdo::option::{bind};
 
         let blog_id = blog_id.to_string();
@@ -250,7 +250,7 @@ impl<'a> TClient<'a> {
             .header(Referer(format!("{}/blog/{}.html", HOST_URL, post_id)))
             .send().unwrap().status {
                 hyper::Ok => Ok(true),
-                x @ _ => Err(TabunError::NumError(x))
+                x => Err(TabunError::NumError(x))
             }
     }
 }

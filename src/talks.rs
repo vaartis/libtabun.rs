@@ -66,7 +66,7 @@ impl<'a> TClient<'a> {
     ///```no_run
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.add_talk(vec!["человек1","человек2"], "Название", "Текст");
-    pub fn add_talk(&mut self, users: &Vec<&str>, title: &str, body:&str) -> Result<i32,TabunError> {
+    pub fn add_talk(&mut self, users: &[&str], title: &str, body:&str ) -> Result<i32,TabunError> {
         use mdo::option::bind;
 
         let users = users.iter().fold(String::new(),|acc, x| format!("{},{}",acc, x));
@@ -100,7 +100,7 @@ impl<'a> TClient<'a> {
             .header(Referer(format!("{}/talk/{}/", HOST_URL, talk_id)))
             .send().unwrap().status {
                 hyper::Ok => Ok(true),
-                x @ _ => Err(TabunError::NumError(x))
+                x => Err(TabunError::NumError(x))
             }
     }
 }
