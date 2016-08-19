@@ -69,7 +69,7 @@ impl<'a> TClient<'a> {
     pub fn add_talk(&mut self, users: &Vec<&str>, title: &str, body:&str) -> Result<i32,TabunError> {
         use mdo::option::bind;
 
-        let users = users.iter().fold(String::new(),|mut acc, x| { acc.push_str(&format!("{}, ", *x)); acc });
+        let users = users.iter().fold(String::new(),|acc, x| format!("{},{}",acc, x));
         let key = self.security_ls_key.clone();
 
         let fields = map![

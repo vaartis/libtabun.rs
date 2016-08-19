@@ -20,22 +20,19 @@ impl<'a> TClient<'a> {
     ///let blog_id = user.get_blog_id("computers").unwrap();
     ///user.add_post(blog_id,"Название поста","Текст поста",vec!["тэг раз","тэг два"]);
     ///```
-    pub fn add_post(&mut self, blog_id: i32, title: &str, body: &str, tags: Vec<&str>) -> Result<i32,TabunError> {
+    pub fn add_post(&mut self, blog_id: i32, title: &str, body: &str, tags: &Vec<&str>) -> Result<i32,TabunError> {
         use mdo::option::bind;
 
         let blog_id = blog_id.to_string();
         let key = self.security_ls_key.clone();
-        let mut rtags = String::new();
-        for i in tags {
-            rtags += &format!("{},", i);
-        }
+        let tags = tags.iter().fold(String::new(), |acc, x| format!("{},{}", acc, x));
 
         let bd = map![
             "topic_type"            =>  "topic",
             "blog_id"               =>  &blog_id,
             "topic_title"           =>  title,
             "topic_text"            =>  body,
-            "topic_tags"            =>  &rtags,
+            "topic_tags"            =>  &tags,
             "submit_topic_publish"  =>  "Опубликовать",
             "security_ls_key"       =>  &key
         ];
@@ -214,13 +211,13 @@ impl<'a> TClient<'a> {
     ///let blog_id = user.get_blog_id("computers").unwrap();
     ///user.edit_post(157198,blog_id,"Новое название", "Новый текст", vec!["тэг".to_string()],false);
     ///```
-    pub fn edit_post(&mut self, post_id: i32, blog_id: i32, title: &str, body: &str, tags: Vec<String>, forbid_comment: bool) -> Result<i32,TabunError> {
+    pub fn edit_post(&mut self, post_id: i32, blog_id: i32, title: &str, body: &str, tags: &Vec<String>, forbid_comment: bool) -> Result<i32,TabunError> {
         use mdo::option::{bind};
 
         let blog_id = blog_id.to_string();
         let key = self.security_ls_key.clone();
         let forbid_comment = if forbid_comment { "1" } else { "0" };
-        let tags = tags.iter().fold(String::new(), |acc, x| acc + &format!("{},", *x));
+        let tags = tags.iter().fold(String::new(), |acc, x| format!("{},{}", acc, x));
 
         let bd = map![
             "topic_type"            =>  "topic",

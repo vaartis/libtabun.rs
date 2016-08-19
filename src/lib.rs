@@ -227,8 +227,10 @@ impl<'a> TClient<'a> {
 
         user.security_ls_key = ls_key_regex.captures(&page_html).unwrap().at(1).unwrap().to_owned();
 
-        let added_url = format!("/login/ajax-login?login={}&password={}&security_ls_key={}"
-                                , login, pass, user.security_ls_key);
+        let added_url = format!("/login/ajax-login?login={login}&password={pass}&security_ls_key={key}",
+                                login = login,
+                                pass = pass,
+                                key = user.security_ls_key);
 
         let res = try!(user.get(&added_url));
 
@@ -253,7 +255,7 @@ impl<'a> TClient<'a> {
     ///Заметка себе: создаёт промежуточный объект запроса, сразу выставляя печеньки,
     ///на случай если надо что-то поменять (как в delete_post)
     fn create_middle_req(&mut self, url: &str) -> hyper::client::RequestBuilder {
-        let full_url = format!("{}{}", HOST_URL, url);
+        let full_url = format!("{}{}", HOST_URL, url); //TODO: Заменить на concat_idents! когда он стабилизируется
         self.client.get(&full_url)
             .header(Cookie::from_cookie_jar(&self.cookies))
     }
@@ -282,7 +284,7 @@ impl<'a> TClient<'a> {
     }
 
     fn multipart(&mut self,url: &str, bd: HashMap<&str,&str>) -> Result<hyper::client::Response,StatusCode> {
-        let url = format!("{}{}", HOST_URL, url);
+        let url = format!("{}{}", HOST_URL, url); //TODO: Заменить на concat_idents! когда он стабилизируется
         let mut request = Request::new(hyper::method::Method::Post,
                                hyper::Url::from_str(&url).unwrap()).unwrap();
         request.headers_mut().set(Cookie::from_cookie_jar(&self.cookies));

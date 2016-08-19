@@ -116,12 +116,12 @@ impl<'a> TClient<'a> {
         let id_regex = Regex::new("\"sCommentId\":(\\d+)").unwrap();
         let err_regex = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"").unwrap();
 
-        let url = format!("/{}/ajaxaddcomment?security_ls_key={}&cmt_target_id={}&reply={}&comment_text={}"
-                          , match typ { CommentType::Post => "blog", CommentType::Talk => "talk" }
-                          , self.security_ls_key
-                          , post_id
-                          , reply
-                          , body);
+        let url = format!("/{typ}/ajaxaddcomment?security_ls_key={key}&cmt_target_id={post_id}&reply={reply}&comment_text={text}",
+                          text      = body,
+                          post_id   = post_id,
+                          reply     = reply,
+                          typ       = match typ { CommentType::Post => "blog", CommentType::Talk => "talk" },
+                          key       = self.security_ls_key);
 
         let res = try!(self.get(&url));
 
