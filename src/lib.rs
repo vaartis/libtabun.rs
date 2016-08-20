@@ -348,19 +348,14 @@ impl<'a> TClient<'a> {
     ///assert_eq!(blog_id,15558);
     ///```
     pub fn get_blog_id(&mut self,name: &str) -> Result<i32,TabunError> {
-        use mdo::option::{bind,ret};
-
         let url = format!("/blog/{}", name);
         let page = try!(self.get(&url));
 
-        Ok(mdo!(
-            x =<< page.find(And(Name("div"),Class("vote-item"))).first();
-            x =<< x.find(Name("span")).first();
-            x =<< x.attr("id");
-            x =<< x.split("_").collect::<Vec<_>>().last();
-            x =<< x.parse::<i32>().ok();
-            ret ret(x)
-        ).unwrap())
+        Ok(page.find(And(Name("div"),Class("vote-item")))
+            .find(Name("span")).first()
+            .unwrap().attr("id")
+            .unwrap().split('_').collect::<Vec<_>>().last()
+            .unwrap().parse::<i32>().unwrap())
     }
 
     ///Получает инфу о пользователе,
