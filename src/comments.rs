@@ -59,14 +59,6 @@ impl<'a> TClient<'a> {
         let url_regex = Regex::new(r"(\d+).html$").unwrap();
 
         for comm in comments.find(Class("comment")).iter() {
-            let parent = match comm.find(Class("goto-comment-parent")).first() {
-                Some(x) => {
-                    let c = x.find(Name("a")).first().unwrap();
-                    let c = c.attr("href").unwrap().split('/').collect::<Vec<_>>();
-                    c[c.len()-1].parse::<i64>().unwrap() },
-                None => 0
-            };
-
             let post_id = if url == "/comments" {
                 let c = comm.find(Class("comment-path-topic"))
                     .first()
@@ -86,13 +78,35 @@ impl<'a> TClient<'a> {
                     .unwrap()
             };
 
-            let text = comm.find(And(Name("div"),Class("text"))).first().unwrap().inner_html();
-            let text = text.as_str();
-
             let id = match comm.find(And(Name("li"),Class("vote"))).first() {
                 Some(x) => x.attr("id").unwrap().split('_').collect::<Vec<_>>()[3].parse::<i64>().unwrap(),
                 None => comm.attr("id").unwrap().split('_').collect::<Vec<_>>()[2].parse::<i64>().unwrap()
             };
+
+            if comm.attr("class").unwrap().contains("comment-bad") || comm.attr("class").unwrap().contains("comment-deleted") {
+                ret.insert(id,Comment{
+                    body:       String::new(),
+                    id:         id,
+                    author:     String::new(),
+                    date:       String::new(),
+                    votes:      0,
+                    parent:     0,
+                    post_id:    post_id,
+                    deleted:    true
+                });
+                continue
+            }
+
+            let parent = match comm.find(Class("goto-comment-parent")).first() {
+                Some(x) => {
+                    let c = x.find(Name("a")).first().unwrap();
+                    let c = c.attr("href").unwrap().split('/').collect::<Vec<_>>();
+                    c[c.len()-1].parse::<i64>().unwrap() },
+                None => 0
+            };
+
+            let text = comm.find(And(Name("div"),Class("text"))).first().unwrap().inner_html();
+            let text = text.as_str();
 
             let author = comm.find(And(Name("li"),Class("comment-author")))
                 .find(Name("a"))
@@ -115,7 +129,8 @@ impl<'a> TClient<'a> {
                 date:       date.to_owned(),
                 votes:      votes,
                 parent:     parent,
-                post_id:    post_id
+                post_id:    post_id,
+                deleted:    false
             });
         }
         Ok(ret)

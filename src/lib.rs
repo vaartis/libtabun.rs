@@ -105,7 +105,8 @@ pub struct Comment {
     pub date:       String,
     pub votes:      i32,
     pub parent:     i64,
-    pub post_id:    i32
+    pub post_id:    i32,
+    pub deleted:    bool
 }
 
 #[derive(Debug,Clone)]
