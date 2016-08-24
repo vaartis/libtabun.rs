@@ -24,11 +24,22 @@ use ::{TClient,TabunError,Talk,HOST_URL};
 
 use select::predicate::{Class, Name, And};
 
-use std::str;
+use std::{str,convert};
 
 use regex::Regex;
 
 use hyper::header::Referer;
+
+pub enum TalkError {
+    NoMembers,
+    TabunError(TabunError)
+}
+
+impl convert::From<hyper::status::StatusCode> for TalkError {
+    fn from(x: hyper::status::StatusCode) -> TalkError {
+        TalkError::TabunError(TabunError::NumError(x))
+    }
+}
 
 impl<'a> TClient<'a> {
 
@@ -85,7 +96,7 @@ impl<'a> TClient<'a> {
     ///```no_run
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.add_talk(vec!["человек1","человек2"], "Название", "Текст");
-    pub fn add_talk(&mut self, users: &[&str], title: &str, body:&str ) -> Result<i32,TabunError> {
+    pub fn add_talk(&mut self, users: &[&str], title: &str, body:&str ) -> Result<i32,TalkError> {
         use mdo::option::bind;
 
         let users = users.iter().fold(String::new(),|acc, x| format!("{},{}",acc, x));
@@ -101,14 +112,17 @@ impl<'a> TClient<'a> {
 
         let res = try!(self.multipart("/talk/add",fields));
 
-        let r = str::from_utf8(&res.headers.get_raw("location").unwrap()[0]).unwrap();
-
-        Ok(mdo!(
+        if let Some(x) = res.headers.get_raw("location") {
+            let r = str::from_utf8(&x[0]).unwrap();
+            Ok(mdo!(
                 regex       =<< Regex::new(r"read/(\d+)/$").ok();
                 captures    =<< regex.captures(r);
                 r           =<< captures.at(1);
                 ret r.parse::<i32>().ok()
-               ).unwrap())
+                ).unwrap())
+        } else {
+            Err(TalkError::NoMembers)
+        }
     }
 
     ///Удаляет цепочку сообщений, и, так как табун ничего не возаращет по этому поводу,
