@@ -125,6 +125,42 @@ impl<'a> TClient<'a> {
         }
     }
 
+    //Список потсов из лс
+    pub fn get_talks(&mut self, page: u32) -> Result<Vec<Talkitem>, TabunError> {
+        let res = try!(self.get(&format!("/talk/inbox/page{}", page)));
+        let mut ret = Vec::new();
+
+        let res = res.find(Name("tbody"));
+
+        for p in res.find(Name("tr")).iter() {
+            let talk_id = p.find(And(Name("a"), Class("js-title-talk")))
+                .first()
+                .unwrap()
+                .attr("href")
+                .unwrap()
+                .split('/').collect::<Vec<_>>()[5].parse::<u32>().unwrap();
+                
+            let talk_title = p.find(And(Name("a"), Class("js-title-talk")))
+                .first()
+                .unwrap()
+                .text();
+            
+            let talk_users = p.find(And(Name("td"), Class("cell-recipients")))
+                .find(And(Name("a"), Class("username")))
+                .iter()
+                .map(|x| x.text().to_string())
+                .collect::<Vec<_>>();
+
+                ret.push(
+                    Talkitem {
+                        id: talk_id,
+                        title: talk_title,
+                        users: talk_users,
+                    });
+        }
+        Ok(ret)
+    }
+
     ///Удаляет цепочку сообщений, и, так как табун ничего не возаращет по этому поводу,
     ///выдаёт Ok(true) в случае удачи
     pub fn delete_talk(&mut self, talk_id: i32) -> Result<bool,TabunError> {
