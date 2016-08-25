@@ -95,7 +95,7 @@ impl<'a> TClient<'a> {
     ///# Examples
     ///```no_run
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
-    ///user.add_talk(vec!["человек1","человек2"], "Название", "Текст");
+    ///user.add_talk(&vec!["человек1","человек2"], "Название", "Текст");
     pub fn add_talk(&mut self, users: &[&str], title: &str, body:&str ) -> Result<i32,TalkError> {
         use mdo::option::bind;
 
@@ -125,7 +125,13 @@ impl<'a> TClient<'a> {
         }
     }
 
-    //Список потсов из лс
+    ///Получить список личных сообщений
+    ///
+    ///# Examples
+    ///```no_run
+    ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    ///user.get_talks(1);
+    ///```
     pub fn get_talks(&mut self, page: u32) -> Result<Vec<TalkItem>, TabunError> {
         let res = try!(self.get(&format!("/talk/inbox/page{}", page)));
         let mut ret = Vec::new();

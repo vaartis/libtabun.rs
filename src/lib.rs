@@ -186,7 +186,7 @@ pub struct Talk {
     pub date:   String
 }
 
-//Список потсов из лс
+///Список личных сообщений
 #[derive(Debug,Clone)]
 pub struct TalkItem {
     pub id: u32,

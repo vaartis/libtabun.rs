@@ -37,7 +37,7 @@ impl<'a> TClient<'a> {
     ///```no_run
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///let blog_id = user.get_blog_id("computers").unwrap();
-    ///user.add_post(blog_id,"Название поста","Текст поста",vec!["тэг раз","тэг два"]);
+    ///user.add_post(blog_id,"Название поста","Текст поста",&vec!["тэг раз","тэг два"]);
     ///```
     pub fn add_post(&mut self, blog_id: i32, title: &str, body: &str, tags: &[&str]) -> Result<i32,TabunError> {
         use mdo::option::bind;
@@ -228,7 +228,7 @@ impl<'a> TClient<'a> {
     ///```no_run
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///let blog_id = user.get_blog_id("computers").unwrap();
-    ///user.edit_post(157198,blog_id,"Новое название", "Новый текст", vec!["тэг".to_string()],false);
+    ///user.edit_post(157198,blog_id,"Новое название", "Новый текст", &vec!["тэг".to_string()],false);
     ///```
     pub fn edit_post(&mut self, post_id: i32, blog_id: i32, title: &str, body: &str, tags: &[String], forbid_comment: bool) -> Result<i32,TabunError> {
         use mdo::option::{bind};
