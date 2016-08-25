@@ -99,12 +99,12 @@ pub struct TClient<'a> {
 #[derive(Debug,Clone)]
 pub struct Comment {
     pub body:       String,
-    pub id:         i64,
+    pub id:         u32,
     pub author:     String,
     pub date:       String,
     pub votes:      i32,
-    pub parent:     i64,
-    pub post_id:    i32,
+    pub parent:     u32,
+    pub post_id:    u32,
     pub deleted:    bool
 }
 
@@ -114,9 +114,9 @@ pub struct Post {
     pub body:           String,
     pub date:           String,
     pub tags:           Vec<String>,
-    pub comments_count: i32,
+    pub comments_count: u32,
     pub author:         String,
-    pub id:             i32,
+    pub id:             u32,
 }
 
 #[derive(Debug,Clone)]
@@ -148,7 +148,7 @@ pub struct UserInfo {
 
     ///Силушка
     pub skill:          f32,
-    pub id:             i32,
+    pub id:             u32,
 
     ///Кармочка
     pub rating:         f32,
@@ -165,13 +165,13 @@ pub struct UserInfo {
     pub blogs:          InBlogs,
 
     ///Кол-во публикаций
-    pub publications:   i32,
+    pub publications:   u32,
 
     ///Кол-во избранного
-    pub favourites:     i32,
+    pub favourites:     u32,
 
     ///Кол-во друзей
-    pub friends:        i32
+    pub friends:        u32
 }
 
 ///Диалог в личных сообщениях
@@ -182,7 +182,7 @@ pub struct Talk {
 
     ///Участники
     pub users:  Vec<String>,
-    pub comments: HashMap<i64, Comment>,
+    pub comments: HashMap<u32, Comment>,
     pub date:   String
 }
 
@@ -352,7 +352,7 @@ impl<'a> TClient<'a> {
     ///let blog_id = user.get_blog_id("lighthouse").unwrap();
     ///assert_eq!(blog_id,15558);
     ///```
-    pub fn get_blog_id(&mut self,name: &str) -> Result<i32,TabunError> {
+    pub fn get_blog_id(&mut self,name: &str) -> Result<u32,TabunError> {
         let url = format!("/blog/{}", name);
         let page = try!(self.get(&url));
 
@@ -360,7 +360,7 @@ impl<'a> TClient<'a> {
             .find(Name("span")).first()
             .unwrap().attr("id")
             .unwrap().split('_').collect::<Vec<_>>().last()
-            .unwrap().parse::<i32>().unwrap())
+            .unwrap().parse::<u32>().unwrap())
     }
 
     ///Получает инфу о пользователе,
@@ -403,7 +403,7 @@ impl<'a> TClient<'a> {
             .unwrap()
             .split('_')
             .collect::<Vec<_>>()[2]
-            .parse::<i32>()
+            .parse::<u32>()
             .unwrap();
 
         let rating = profile.find(Class("vote-count"))
@@ -476,7 +476,7 @@ impl<'a> TClient<'a> {
                  if a.len() >1 {
                      let val = a[1].to_string()
                          .replace(")","")
-                         .parse::<i32>()
+                         .parse::<u32>()
                          .unwrap();
                      if a[0].contains(&"Публикации") {
                          publications = val
