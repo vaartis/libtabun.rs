@@ -186,6 +186,14 @@ pub struct Talk {
     pub date:   String
 }
 
+//Список потсов из лс
+#[derive(Debug,Clone)]
+pub struct Talkitem {
+    pub id: u32,
+    pub title:  String,
+    pub users:  Vec<String>,
+}
+
 //Реализации
 
 impl From<StatusCode> for TabunError {
