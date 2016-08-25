@@ -39,7 +39,7 @@ impl<'a> TClient<'a> {
     ///let blog_id = user.get_blog_id("computers").unwrap();
     ///user.add_post(blog_id,"Название поста","Текст поста",&vec!["тэг раз","тэг два"]);
     ///```
-    pub fn add_post(&mut self, blog_id: i32, title: &str, body: &str, tags: &[&str]) -> Result<i32,TabunError> {
+    pub fn add_post(&mut self, blog_id: u32, title: &str, body: &str, tags: &[&str]) -> Result<u32,TabunError> {
         use mdo::option::bind;
 
         let blog_id = blog_id.to_string();
@@ -64,7 +64,7 @@ impl<'a> TClient<'a> {
                 regex       =<< Regex::new(r"(\d+).html$").ok();
                 captures    =<< regex.captures(r);
                 r           =<< captures.at(1);
-                ret r.parse::<i32>().ok()
+                ret r.parse::<u32>().ok()
                ).unwrap())
     }
 
@@ -75,7 +75,7 @@ impl<'a> TClient<'a> {
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.get_posts("lighthouse",1);
     ///```
-    pub fn get_posts(&mut self, blog_name: &str, page: i32) -> Result<Vec<Post>,TabunError>{
+    pub fn get_posts(&mut self, blog_name: &str, page: u32) -> Result<Vec<Post>,TabunError>{
         let res = try!(self.get(&format!("/blog/{}/page{}", blog_name, page)));
         let mut ret = Vec::new();
 
@@ -85,7 +85,7 @@ impl<'a> TClient<'a> {
                 .unwrap()
                 .attr("id")
                 .unwrap()
-                .split('_').collect::<Vec<_>>()[3].parse::<i32>().unwrap();
+                .split('_').collect::<Vec<_>>()[3].parse::<u32>().unwrap();
 
             let post_title = p.find(And(Name("h1"),Class("topic-title")))
                 .first()
@@ -114,7 +114,7 @@ impl<'a> TClient<'a> {
                 .first()
                 .unwrap()
                 .find(Name("span")).first().unwrap().text()
-                .parse::<i32>().unwrap();
+                .parse::<u32>().unwrap();
 
             let post_author = res.find(And(Name("div"),Class("topic-info")))
                 .find(And(Name("a"),Attr("rel","author")))
@@ -141,7 +141,7 @@ impl<'a> TClient<'a> {
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.get_editable_post(1111);
     ///```
-    pub fn get_editable_post(&mut self, post_id: i32) -> Result<EditablePost,TabunError> {
+    pub fn get_editable_post(&mut self, post_id: u32) -> Result<EditablePost,TabunError> {
         let res = try!(self.get(&format!("/topic/edit/{}",post_id)));
 
         let title = res.find(Attr("id","topic_title")).first().unwrap();
@@ -168,7 +168,7 @@ impl<'a> TClient<'a> {
     /// //или
     ///user.get_post("",157198);
     ///```
-    pub fn get_post(&mut self,blog_name: &str,post_id: i32) -> Result<Post,TabunError>{
+    pub fn get_post(&mut self,blog_name: &str,post_id: u32) -> Result<Post,TabunError>{
         let res = if blog_name.is_empty() {
             try!(self.get(&format!("/blog/{}.html",post_id)))
         } else {
@@ -202,7 +202,7 @@ impl<'a> TClient<'a> {
             .first()
             .unwrap()
             .text()
-            .parse::<i32>()
+            .parse::<u32>()
             .unwrap();
 
         let post_author = res.find(And(Name("div"),Class("topic-info")))
@@ -230,7 +230,7 @@ impl<'a> TClient<'a> {
     ///let blog_id = user.get_blog_id("computers").unwrap();
     ///user.edit_post(157198,blog_id,"Новое название", "Новый текст", &vec!["тэг".to_string()],false);
     ///```
-    pub fn edit_post(&mut self, post_id: i32, blog_id: i32, title: &str, body: &str, tags: &[String], forbid_comment: bool) -> Result<i32,TabunError> {
+    pub fn edit_post(&mut self, post_id: u32, blog_id: u32, title: &str, body: &str, tags: &[String], forbid_comment: bool) -> Result<u32,TabunError> {
         use mdo::option::{bind};
 
         let blog_id = blog_id.to_string();
@@ -257,13 +257,13 @@ impl<'a> TClient<'a> {
             regex       =<< Regex::new(r"(\d+).html$").ok();
             captures    =<< regex.captures(r);
             r           =<< captures.at(1);
-            ret r.parse::<i32>().ok()
+            ret r.parse::<u32>().ok()
         ).unwrap())
     }
 
     ///Удаляет пост, и, так как табун ничего не возаращет по этому поводу,
     ///выдаёт Ok(true) в случае удачи
-    pub fn delete_post(&mut self, post_id: i32) -> Result<bool,TabunError> {
+    pub fn delete_post(&mut self, post_id: u32) -> Result<bool,TabunError> {
         let url = format!("/topic/delete/{}/?security_ls_key={}", post_id ,&self.security_ls_key);
         match self.create_middle_req(&url)
             .header(Referer(format!("{}/blog/{}.html", HOST_URL, post_id)))

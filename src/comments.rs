@@ -37,7 +37,7 @@ impl<'a> TClient<'a> {
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.get_comments("/blog/lighthouse/157807.html");
     ///```
-    pub fn get_comments(&mut self,url: &str) -> Result<HashMap<i64,Comment>,TabunError> {
+    pub fn get_comments(&mut self,url: &str) -> Result<HashMap<u32,Comment>,TabunError> {
         let mut ret = HashMap::new();
         let mut url = url.to_string();
 
@@ -67,20 +67,20 @@ impl<'a> TClient<'a> {
                     .unwrap()
                     .at(1)
                     .unwrap()
-                    .parse::<i32>()
+                    .parse::<u32>()
                     .unwrap()
             } else {
                 url_regex.captures(url)
                     .unwrap()
                     .at(1)
                     .unwrap()
-                    .parse::<i32>()
+                    .parse::<u32>()
                     .unwrap()
             };
 
             let id = match comm.find(And(Name("li"),Class("vote"))).first() {
-                Some(x) => x.attr("id").unwrap().split('_').collect::<Vec<_>>()[3].parse::<i64>().unwrap(),
-                None => comm.attr("id").unwrap().split('_').collect::<Vec<_>>()[2].parse::<i64>().unwrap()
+                Some(x) => x.attr("id").unwrap().split('_').collect::<Vec<_>>()[3].parse::<u32>().unwrap(),
+                None => comm.attr("id").unwrap().split('_').collect::<Vec<_>>()[2].parse::<u32>().unwrap()
             };
 
             if comm.attr("class").unwrap().contains("comment-bad") || comm.attr("class").unwrap().contains("comment-deleted") {
@@ -101,7 +101,7 @@ impl<'a> TClient<'a> {
                 Some(x) => {
                     let c = x.find(Name("a")).first().unwrap();
                     let c = c.attr("href").unwrap().split('/').collect::<Vec<_>>();
-                    c[c.len()-1].parse::<i64>().unwrap() },
+                    c[c.len()-1].parse::<u32>().unwrap() },
                 None => 0
             };
 
@@ -144,7 +144,7 @@ impl<'a> TClient<'a> {
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.comment(1234,"Привет!", 0, libtabun::CommentType::Post);
     ///```
-    pub fn comment(&mut self,post_id: i32, body : &str, reply: i64, typ: CommentType) -> Result<i64,TabunError>{
+    pub fn comment(&mut self,post_id: u32, body : &str, reply: u32, typ: CommentType) -> Result<u32,TabunError>{
         use mdo::option::{bind};
 
         let id_regex = Regex::new("\"sCommentId\":(\\d+)").unwrap();
@@ -170,7 +170,7 @@ impl<'a> TClient<'a> {
         Ok(mdo!(
             captures    =<< id_regex.captures(res);
             r           =<< captures.at(1);
-            ret r.parse::<i64>().ok()
+            ret r.parse::<u32>().ok()
         ).unwrap())
     }
 
@@ -181,7 +181,7 @@ impl<'a> TClient<'a> {
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.comments_subscribe(157198,false);
     ///```
-    pub fn comments_subscribe(&mut self, post_id: i32, subscribed: bool) {
+    pub fn comments_subscribe(&mut self, post_id: u32, subscribed: bool) {
         let subscribed = if subscribed { "1" } else { "0" };
 
         let post_id = post_id.to_string();

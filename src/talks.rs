@@ -49,7 +49,7 @@ impl<'a> TClient<'a> {
     ///```no_run
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.get_talk(123);
-    pub fn get_talk(&mut self, talk_id: i32) -> Result<Talk,TabunError>{
+    pub fn get_talk(&mut self, talk_id: u32) -> Result<Talk,TabunError>{
         let url = format!("/talk/read/{}", talk_id);
         let page = try!(self.get(&url));
 
@@ -96,7 +96,7 @@ impl<'a> TClient<'a> {
     ///```no_run
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.add_talk(&vec!["человек1","человек2"], "Название", "Текст");
-    pub fn add_talk(&mut self, users: &[&str], title: &str, body:&str ) -> Result<i32,TalkError> {
+    pub fn add_talk(&mut self, users: &[&str], title: &str, body:&str ) -> Result<u32,TalkError> {
         use mdo::option::bind;
 
         let users = users.iter().fold(String::new(),|acc, x| format!("{},{}",acc, x));
@@ -118,7 +118,7 @@ impl<'a> TClient<'a> {
                 regex       =<< Regex::new(r"read/(\d+)/$").ok();
                 captures    =<< regex.captures(r);
                 r           =<< captures.at(1);
-                ret r.parse::<i32>().ok()
+                ret r.parse::<u32>().ok()
                 ).unwrap())
         } else {
             Err(TalkError::NoMembers)
@@ -169,7 +169,7 @@ impl<'a> TClient<'a> {
 
     ///Удаляет цепочку сообщений, и, так как табун ничего не возаращет по этому поводу,
     ///выдаёт Ok(true) в случае удачи
-    pub fn delete_talk(&mut self, talk_id: i32) -> Result<bool,TabunError> {
+    pub fn delete_talk(&mut self, talk_id: u32) -> Result<bool,TabunError> {
         let url = format!("/talk/delete/{}/?security_ls_key={}", talk_id ,&self.security_ls_key);
         match self.create_middle_req(&url)
             .header(Referer(format!("{}/talk/{}/", HOST_URL, talk_id)))
