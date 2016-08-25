@@ -20,7 +20,7 @@
 extern crate regex;
 extern crate hyper;
 
-use ::{TClient,TabunError,Talk,HOST_URL};
+use ::{TClient,TabunError,Talk,TalkItem,HOST_URL};
 
 use select::predicate::{Class, Name, And};
 
@@ -126,7 +126,7 @@ impl<'a> TClient<'a> {
     }
 
     //Список потсов из лс
-    pub fn get_talks(&mut self, page: u32) -> Result<Vec<Talkitem>, TabunError> {
+    pub fn get_talks(&mut self, page: u32) -> Result<Vec<TalkItem>, TabunError> {
         let res = try!(self.get(&format!("/talk/inbox/page{}", page)));
         let mut ret = Vec::new();
 
@@ -152,7 +152,7 @@ impl<'a> TClient<'a> {
                 .collect::<Vec<_>>();
 
                 ret.push(
-                    Talkitem {
+                    TalkItem {
                         id: talk_id,
                         title: talk_title,
                         users: talk_users,

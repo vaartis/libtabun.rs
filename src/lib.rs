@@ -188,7 +188,7 @@ pub struct Talk {
 
 //Список потсов из лс
 #[derive(Debug,Clone)]
-pub struct Talkitem {
+pub struct TalkItem {
     pub id: u32,
     pub title:  String,
     pub users:  Vec<String>,
