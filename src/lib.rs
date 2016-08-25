@@ -21,7 +21,6 @@ extern crate hyper;
 extern crate select;
 extern crate regex;
 extern crate cookie;
-extern crate time;
 extern crate multipart;
 #[macro_use] extern crate mdo;
 
@@ -231,7 +230,7 @@ impl<'a> TClient<'a> {
                 name:               String::new(),
                 security_ls_key:    String::new(),
                 client:             Client::new(),
-                cookies:            CookieJar::new(time::now().to_timespec().sec.to_string().as_bytes()),
+                cookies:            CookieJar::new(format!("{:?}",std::time::SystemTime::now()).as_bytes()),
             });
         }
 

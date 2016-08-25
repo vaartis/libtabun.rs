@@ -4,10 +4,9 @@ version = "0.2.5"
 authors = ["TyanNN <tyannn@cocaine.ninja>"]
 
 [dependencies]
-hyper		= "0.8"
-multipart	= "0.7.0"
+hyper		= "0.8.1"
+multipart	= {version = "0.7.0", features = ["client"]}
 select		= "*"
 regex		= "*"
 cookie		= "0.2.5"
-time		= "*"
 mdo 		= "*"
