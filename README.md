@@ -2,6 +2,12 @@
 API для tabun.everypony.ru
 
 # Установка
+
+```toml
+[dependencies]
+libtabun = { git = "https://github.com/TyanNN/libtabun.rs" }
+```
+
 ```bash
 cargo build
 ```
