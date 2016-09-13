@@ -40,8 +40,6 @@ impl<'a> TClient<'a> {
     ///user.add_post(blog_id,"Название поста","Текст поста",&vec!["тэг раз","тэг два"]);
     ///```
     pub fn add_post(&mut self, blog_id: u32, title: &str, body: &str, tags: &[&str]) -> Result<u32,TabunError> {
-        use mdo::option::bind;
-
         let blog_id = blog_id.to_string();
         let key = self.security_ls_key.clone();
         let tags = tags.iter().fold(String::new(), |acc, x| format!("{},{}", acc, x));
@@ -58,14 +56,13 @@ impl<'a> TClient<'a> {
 
         let res = try!(self.multipart("/topic/add",bd));
 
-        let r = str::from_utf8(&res.headers.get_raw("location").unwrap()[0]).unwrap();
-
-        Ok(mdo!(
-                regex       =<< Regex::new(r"(\d+).html$").ok();
-                captures    =<< regex.captures(r);
-                r           =<< captures.at(1);
-                ret r.parse::<u32>().ok()
-               ).unwrap())
+        match Regex::new(r"(\d+).html$").ok()
+            .and_then(|x| x.captures( str::from_utf8(&res.headers.get_raw("location").unwrap()[0]).unwrap() ))
+            .and_then(|x| x.at(1))
+            .and_then(|x| x.parse::<u32>().ok()) {
+                Some(x) => Ok(x),
+                None    => unreachable!()
+            }
     }
 
     ///Получает посты из блога
@@ -231,8 +228,6 @@ impl<'a> TClient<'a> {
     ///user.edit_post(157198,blog_id,"Новое название", "Новый текст", &vec!["тэг".to_string()],false);
     ///```
     pub fn edit_post(&mut self, post_id: u32, blog_id: u32, title: &str, body: &str, tags: &[String], forbid_comment: bool) -> Result<u32,TabunError> {
-        use mdo::option::{bind};
-
         let blog_id = blog_id.to_string();
         let key = self.security_ls_key.clone();
         let forbid_comment = if forbid_comment { "1" } else { "0" };
@@ -253,12 +248,13 @@ impl<'a> TClient<'a> {
 
         let r = str::from_utf8(&res.headers.get_raw("location").unwrap()[0]).unwrap();
 
-        Ok(mdo!(
-            regex       =<< Regex::new(r"(\d+).html$").ok();
-            captures    =<< regex.captures(r);
-            r           =<< captures.at(1);
-            ret r.parse::<u32>().ok()
-        ).unwrap())
+        match Regex::new(r"(\d+).html$").ok()
+            .and_then(|x| x.captures(r))
+            .and_then(|x| x.at(1))
+            .and_then(|x| x.parse::<u32>().ok()) {
+                Some(x) => Ok(x),
+                None    => unreachable!()
+            }
     }
 
     ///Удаляет пост, и, так как табун ничего не возаращет по этому поводу,

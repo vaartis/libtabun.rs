@@ -9,4 +9,3 @@ multipart	= {version = "0.7.0", features = ["client"]}
 select		= "*"
 regex		= "*"
 cookie		= "0.2.5"
-mdo 		= "*"

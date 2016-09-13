@@ -145,11 +145,6 @@ impl<'a> TClient<'a> {
     ///user.comment(1234,"Привет!", 0, libtabun::CommentType::Post);
     ///```
     pub fn comment(&mut self,post_id: u32, body : &str, reply: u32, typ: CommentType) -> Result<u32,TabunError>{
-        use mdo::option::{bind};
-
-        let id_regex = Regex::new("\"sCommentId\":(\\d+)").unwrap();
-        let err_regex = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"").unwrap();
-
         let url = format!("/{typ}/ajaxaddcomment?security_ls_key={key}&cmt_target_id={post_id}&reply={reply}&comment_text={text}",
                           text      = body,
                           post_id   = post_id,
@@ -162,16 +157,18 @@ impl<'a> TClient<'a> {
         let res = res.nth(0).unwrap().text();
         let res = res.as_str();
 
-        if err_regex.is_match(res) {
-            let err = err_regex.captures(res).unwrap();
+        if let Ok(x) = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"") {
+            let err = x.captures(res).unwrap();
             return Err(TabunError::Error(err.at(1).unwrap().to_owned(),err.at(2).unwrap().to_owned()));
         }
 
-        Ok(mdo!(
-            captures    =<< id_regex.captures(res);
-            r           =<< captures.at(1);
-            ret r.parse::<u32>().ok()
-        ).unwrap())
+        match Regex::new("\"sCommentId\":(\\d+)").ok()
+            .and_then(|x| x.captures(res))
+            .and_then(|x| x.at(1))
+            .and_then(|x| x.parse::<u32>().ok()) {
+                Some(x) => Ok(x),
+                None    => unreachable!()
+            }
     }
 
     ///Подписаться/отписаться от комментариев к посту.

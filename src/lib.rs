@@ -22,7 +22,6 @@ extern crate select;
 extern crate regex;
 extern crate cookie;
 extern crate multipart;
-#[macro_use] extern crate mdo;
 
 use std::fmt::Display;
 use std::str::FromStr;

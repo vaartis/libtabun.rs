@@ -97,7 +97,6 @@ impl<'a> TClient<'a> {
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.add_talk(&vec!["человек1","человек2"], "Название", "Текст");
     pub fn add_talk(&mut self, users: &[&str], title: &str, body:&str ) -> Result<u32,TalkError> {
-        use mdo::option::bind;
 
         let users = users.iter().fold(String::new(),|acc, x| format!("{},{}",acc, x));
         let key = self.security_ls_key.clone();
@@ -113,13 +112,13 @@ impl<'a> TClient<'a> {
         let res = try!(self.multipart("/talk/add",fields));
 
         if let Some(x) = res.headers.get_raw("location") {
-            let r = str::from_utf8(&x[0]).unwrap();
-            Ok(mdo!(
-                regex       =<< Regex::new(r"read/(\d+)/$").ok();
-                captures    =<< regex.captures(r);
-                r           =<< captures.at(1);
-                ret r.parse::<u32>().ok()
-                ).unwrap())
+            match Regex::new(r"read/(\d+)/$").ok()
+                .and_then(|r| r.captures( str::from_utf8(&x[0]).unwrap() ))
+                .and_then(|x| x.at(1))
+                .and_then(|x| x.parse::<u32>().ok()) {
+                    Some(x) => Ok(x),
+                    None    => unreachable!()
+                }
         } else {
             Err(TalkError::NoMembers)
         }
