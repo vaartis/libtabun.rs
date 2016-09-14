@@ -56,6 +56,25 @@ macro_rules! map(
      };
 );
 
+///Макро для парса строк и возврата Result,
+///парсит st указанным regex, затем вынимает группу номер num
+///и парсит в typ
+macro_rules! parse_text_to_res(
+    { $(regex => $regex:expr, st => $st:expr, num => $n:expr, typ => $typ:ty)+ } => {
+        {
+            $(
+                match Regex::new($regex).ok()
+                    .and_then(|x| x.captures($st))
+                    .and_then(|x| x.at($n))
+                    .and_then(|x| x.parse::<$typ>().ok()) {
+                        Some(x) => Ok(x),
+                        None    => unreachable!()
+                    }
+            )+
+        }
+    };
+);
+
 mod comments;
 mod posts;
 mod talks;
@@ -151,7 +170,7 @@ pub struct UserInfo {
 
     ///Кармочка
     pub rating:         f32,
- 
+
     ///URL картинки, иногда с `//`, иногда с `https://`
     pub userpic:        String,
     pub description:    String,

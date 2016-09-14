@@ -112,13 +112,7 @@ impl<'a> TClient<'a> {
         let res = try!(self.multipart("/talk/add",fields));
 
         if let Some(x) = res.headers.get_raw("location") {
-            match Regex::new(r"read/(\d+)/$").ok()
-                .and_then(|r| r.captures( str::from_utf8(&x[0]).unwrap() ))
-                .and_then(|x| x.at(1))
-                .and_then(|x| x.parse::<u32>().ok()) {
-                    Some(x) => Ok(x),
-                    None    => unreachable!()
-                }
+            parse_text_to_res!(regex => r"read/(\d+)/$", st => str::from_utf8(&x[0]).unwrap(), num => 1, typ => u32)
         } else {
             Err(TalkError::NoMembers)
         }
@@ -144,12 +138,12 @@ impl<'a> TClient<'a> {
                 .attr("href")
                 .unwrap()
                 .split('/').collect::<Vec<_>>()[5].parse::<u32>().unwrap();
-                
+
             let talk_title = p.find(And(Name("a"), Class("js-title-talk")))
                 .first()
                 .unwrap()
                 .text();
-            
+
             let talk_users = p.find(And(Name("td"), Class("cell-recipients")))
                 .find(And(Name("a"), Class("username")))
                 .iter()

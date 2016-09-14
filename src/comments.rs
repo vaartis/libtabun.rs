@@ -162,13 +162,7 @@ impl<'a> TClient<'a> {
             return Err(TabunError::Error(err.at(1).unwrap().to_owned(),err.at(2).unwrap().to_owned()));
         }
 
-        match Regex::new("\"sCommentId\":(\\d+)").ok()
-            .and_then(|x| x.captures(res))
-            .and_then(|x| x.at(1))
-            .and_then(|x| x.parse::<u32>().ok()) {
-                Some(x) => Ok(x),
-                None    => unreachable!()
-            }
+        parse_text_to_res!(regex => "\"sCommentId\":(\\d+)", st => res, num => 1, typ => u32 )
     }
 
     ///Подписаться/отписаться от комментариев к посту.

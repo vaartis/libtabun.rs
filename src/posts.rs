@@ -56,13 +56,8 @@ impl<'a> TClient<'a> {
 
         let res = try!(self.multipart("/topic/add",bd));
 
-        match Regex::new(r"(\d+).html$").ok()
-            .and_then(|x| x.captures( str::from_utf8(&res.headers.get_raw("location").unwrap()[0]).unwrap() ))
-            .and_then(|x| x.at(1))
-            .and_then(|x| x.parse::<u32>().ok()) {
-                Some(x) => Ok(x),
-                None    => unreachable!()
-            }
+        let r = str::from_utf8(&res.headers.get_raw("location").unwrap()[0]).unwrap();
+        parse_text_to_res!(regex => r"(\d+).html$", st => r, num => 1, typ => u32 )
     }
 
     ///Получает посты из блога
@@ -248,13 +243,8 @@ impl<'a> TClient<'a> {
 
         let r = str::from_utf8(&res.headers.get_raw("location").unwrap()[0]).unwrap();
 
-        match Regex::new(r"(\d+).html$").ok()
-            .and_then(|x| x.captures(r))
-            .and_then(|x| x.at(1))
-            .and_then(|x| x.parse::<u32>().ok()) {
-                Some(x) => Ok(x),
-                None    => unreachable!()
-            }
+        parse_text_to_res!(regex => r"(\d+).html$", st => r, num => 1, typ => u32)
+
     }
 
     ///Удаляет пост, и, так как табун ничего не возаращет по этому поводу,
