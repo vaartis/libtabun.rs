@@ -189,3 +189,17 @@ impl<'a> TClient<'a> {
         let _ = self.multipart("/subscribe/ajax-subscribe-toggle",body);
     }
 }
+
+#[test]
+fn test_get_comments() {
+    let mut user = TClient::new("","").unwrap();
+    match user.get_comments("/blog/news/67052.html") { //Старый пост Орхи
+        Ok(x)   => {
+            assert!(x[&3927613].body.contains("нежданчик"));
+            assert_eq!(x[&3927613].votes, 0);
+            assert_eq!(x[&3927613].parent, 0);
+            assert_eq!(x[&3927613].post_id, 67052);
+        },
+        Err(x)  => panic!(x)
+    }
+}

@@ -259,3 +259,16 @@ impl<'a> TClient<'a> {
             }
     }
 }
+
+#[test]
+fn test_get_post() {
+    let mut user = TClient::new("","").unwrap();
+    match user.get_post("news",67052) {
+        Ok(x)   => {
+            assert_eq!(x.author, "Orhideous");
+            assert_eq!(x.date, "2013-06-16T15:00:06+04:00");
+            assert!(x.tags.contains(&"успех".to_string()))
+        },
+        Err(x)  => panic!(x)
+    }
+}

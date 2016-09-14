@@ -523,3 +523,30 @@ impl<'a> TClient<'a> {
         })
     }
 }
+
+#[test]
+fn test_parsetext_macro() {
+    let r : Result<u32, regex::Error> = parse_text_to_res!(regex => r"sometext (\d+) sometext", st => "sometext 001 sometext", num => 1, typ => u32);
+    match r {
+        Ok(x)   => assert_eq!(x, 1),
+        Err(_)  => unreachable!()
+    }
+}
+
+#[test]
+fn test_blog_id() {
+    let mut user = TClient::new("","").unwrap();
+    match user.get_blog_id("lighthouse") {
+        Ok(x)   => assert_eq!(15558, x),
+        Err(x)  => panic!(x)
+    }
+}
+
+#[test]
+fn test_get_profile() {
+    let mut user = TClient::new("","").unwrap();
+    match user.get_profile("OrHiDeOuS") {
+        Ok(x)   => assert_eq!(x.username, "Orhideous"),
+        Err(x)  => panic!(x)
+    }
+}
