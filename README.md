@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.org/TyanNN/libtabun.rs.svg?branch=master)](https://travis-ci.org/TyanNN/libtabun.rs)
 # libtabun.rs
 API для tabun.everypony.ru
 
