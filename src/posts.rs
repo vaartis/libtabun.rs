@@ -258,6 +258,10 @@ impl<'a> TClient<'a> {
                 x => Err(TabunError::NumError(x))
             }
     }
+
+    pub fn favourite_post(&mut self, id: u32, typ: bool) -> Result<u32, TabunError> {
+        self.favourite(id, typ, false)
+    }
 }
 
 #[test]

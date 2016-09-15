@@ -20,7 +20,7 @@
 extern crate select;
 extern crate regex;
 
-use ::{TClient,Comment,TabunError,CommentType};
+use ::{unescape,TClient,Comment,TabunError,CommentType};
 use select::predicate::{And,Class,Name};
 
 use std::collections::HashMap;
@@ -159,7 +159,9 @@ impl<'a> TClient<'a> {
 
         if let Ok(x) = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"") {
             let err = x.captures(res).unwrap();
-            return Err(TabunError::Error(err.at(1).unwrap().to_owned(),err.at(2).unwrap().to_owned()));
+            return Err(TabunError::Error(
+                    unescape!(err.at(1).unwrap()),
+                    unescape!(err.at(2).unwrap())));
         }
 
         parse_text_to_res!(regex => "\"sCommentId\":(\\d+)", st => res, num => 1, typ => u32 )
@@ -187,6 +189,10 @@ impl<'a> TClient<'a> {
         ];
 
         let _ = self.multipart("/subscribe/ajax-subscribe-toggle",body);
+    }
+
+    pub fn favourite_comment(&mut self, id: u32, typ: bool) -> Result<u32, TabunError> {
+        self.favourite(id, typ, true)
     }
 }
 

@@ -22,6 +22,7 @@ extern crate select;
 extern crate regex;
 extern crate cookie;
 extern crate multipart;
+extern crate unescape;
 
 use std::fmt::Display;
 use std::str::FromStr;
@@ -75,6 +76,20 @@ macro_rules! parse_text_to_res(
     };
 );
 
+///Макро для удобного unescape
+macro_rules! unescape(
+    { $($x:expr)+ } => {
+        {
+            $(
+                match unescape::unescape($x) {
+                    Some(x) => x,
+                    None    => unreachable!()
+                }
+             )+
+        }
+    };
+);
+
 mod comments;
 mod posts;
 mod talks;
@@ -89,7 +104,6 @@ pub enum TabunError {
     ///Ошибка с названием и описанием,
     ///обычно соответствует табуновским
     ///всплывающим сообщениям
-    ///TODO: сделать их читаемыми
     Error(String,String),
 
     ///Ошибка с номером, вроде 404 и 403
@@ -287,7 +301,9 @@ impl<'a> TClient<'a> {
             Err(TabunError::HackingAttempt)
         } else if err_regex.is_match(res) {
             let err = err_regex.captures(res).unwrap();
-            Err(TabunError::Error(err.at(1).unwrap().to_owned(),err.at(2).unwrap().to_owned()))
+            Err(TabunError::Error(
+                    unescape!(err.at(1).unwrap()),
+                    unescape!(err.at(2).unwrap())))
         } else {
             let page = try!(user.get(&"".to_owned()));
 
@@ -358,7 +374,9 @@ impl<'a> TClient<'a> {
             let err_regex = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"").unwrap();
             let s = res_s.clone();
             let err = err_regex.captures(&s).unwrap();
-            Err(TabunError::Error(err.at(1).unwrap().to_owned(),err.at(2).unwrap().to_owned()))
+            Err(TabunError::Error(
+                    unescape!(err.at(1).unwrap()),
+                    unescape!(err.at(2).unwrap())))
         }
     }
 
@@ -521,6 +539,34 @@ impl<'a> TClient<'a> {
             favourites:     favourites,
             friends:        friends
         })
+    }
+
+    ///Добавляет что-то в избранное, true - коммент, false - пост
+    fn favourite(&mut self, id: u32, typ: bool, fn_typ: bool) -> Result<u32, TabunError> {
+        let id = id.to_string();
+        let key = self.security_ls_key.clone();
+
+        let body = map![
+        if fn_typ { "idComment"} else { "idTopic" } => id.as_str(),
+        "type"                                      => &(if typ { "1" } else { "0" }),
+        "security_ls_key"                           => &key
+        ];
+
+        let mut res = try!(self.multipart(&format!("/ajax/favourite/{}/", if fn_typ { "comment" } else { "topic" }),body));
+
+        if res.status != hyper::Ok { return Err(TabunError::NumError(res.status)) }
+
+        let mut bd = String::new();
+        res.read_to_string(&mut bd).unwrap();
+
+        if bd.contains("\"bStateError\":true") {
+            let err = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"").unwrap().captures(&bd).unwrap();
+            Err(TabunError::Error(
+                    unescape!(err.at(1).unwrap()),
+                    unescape!(err.at(2).unwrap())))
+        } else {
+            parse_text_to_res!(regex => "\"iCount\":(\\d+)", st => &bd, num => 1, typ => u32)
+        }
     }
 }
 
