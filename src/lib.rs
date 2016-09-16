@@ -280,20 +280,18 @@ impl<'a> TClient<'a> {
 
         let ls_key_regex = Regex::new(r"LIVESTREET_SECURITY_KEY = '(.+)'").unwrap();
 
-        let page = try!(user.get(&"/login".to_owned()));
+        let page = try!(user.get(&"/login".to_owned()))
+            .find(Name("html")).first().unwrap().html();
 
-        let page_html = page.find(Name("html")).first().unwrap().html();
-
-        user.security_ls_key = ls_key_regex.captures(&page_html).unwrap().at(1).unwrap().to_owned();
+        user.security_ls_key = ls_key_regex.captures(&page).unwrap().at(1).unwrap().to_owned();
 
         let added_url = format!("/login/ajax-login?login={login}&password={pass}&security_ls_key={key}",
                                 login = login,
                                 pass = pass,
                                 key = user.security_ls_key);
 
-        let res = try!(user.get(&added_url));
-
-        let res = res.nth(0).unwrap().text();
+        let res = try!(user.get(&added_url))
+            .nth(0).unwrap().text();
         let res = res.as_str();
 
 

@@ -191,6 +191,13 @@ impl<'a> TClient<'a> {
         let _ = self.multipart("/subscribe/ajax-subscribe-toggle",body);
     }
 
+    ///Добавить комментарий в изранное или удалить его оттуда (true/false)
+    ///
+    ///# Examples
+    ///```no_run
+    ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    ///user.favourite_comment(12345, true);
+    ///```
     pub fn favourite_comment(&mut self, id: u32, typ: bool) -> Result<u32, TabunError> {
         self.favourite(id, typ, true)
     }

@@ -259,6 +259,13 @@ impl<'a> TClient<'a> {
             }
     }
 
+    ///Добавить пост в изранное или удалить его оттуда (true/false)
+    ///
+    ///# Examples
+    ///```no_run
+    ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    ///user.favourite_post(12345, true);
+    ///```
     pub fn favourite_post(&mut self, id: u32, typ: bool) -> Result<u32, TabunError> {
         self.favourite(id, typ, false)
     }
