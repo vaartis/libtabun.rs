@@ -205,6 +205,7 @@ impl<'a> TClient<'a> {
 
 #[cfg(test)]
 mod test {
+    use ::TClient;
 
     #[test]
     fn test_get_comments() {
