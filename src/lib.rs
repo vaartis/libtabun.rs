@@ -303,9 +303,12 @@ impl<'a> TClient<'a> {
                     unescape!(err.at(1).unwrap()),
                     unescape!(err.at(2).unwrap())))
         } else {
-            let page = try!(user.get(&"".to_owned()));
 
-            user.name = page.find(Class("username")).first().unwrap().text();
+            user.name = try!(user.get(&"".to_owned()))
+                .find(Class("username"))
+                .first()
+                .unwrap()
+                .text();
 
             Ok(user)
         }
@@ -319,7 +322,7 @@ impl<'a> TClient<'a> {
             .header(Cookie::from_cookie_jar(&self.cookies))
     }
 
-    fn get(&mut self,url: &str) -> Result<Document,StatusCode>{
+    fn get(&mut self,url: &str) -> Result<Document,StatusCode> {
         let mut res = self.create_middle_req(url)
             .send()
             .unwrap();
@@ -329,14 +332,8 @@ impl<'a> TClient<'a> {
         let mut buf = String::new();
         res.read_to_string(&mut buf).unwrap();
 
-        let cookie = if res.headers.has::<SetCookie>() {
-            Some(res.headers.get::<SetCookie>().unwrap())
-        } else {
-            None
-        };
-
-        if let Some(_) = cookie {
-            cookie.unwrap().apply_to_cookie_jar(&mut self.cookies);
+        if let Some(x) = res.headers.get::<SetCookie>() {
+            x.apply_to_cookie_jar(&mut self.cookies);
         }
 
         Ok(Document::from(&*buf))
