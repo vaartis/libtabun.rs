@@ -14,6 +14,8 @@ cargo build
 ```
 # Документация
 
+Можно почитать [тут](https://kotobank.ch/~easy/tabun_docs/libtabun/) или собрать самому:
+
 ```bash
 cargo doc
 ```

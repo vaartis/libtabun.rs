@@ -17,6 +17,16 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
+//! Эта библиотека предназначена для
+//! взаимодействия с [табуном](https://tabun.everypony.ru)
+//! (и потенциально прочими сайтами на лайвстрите), так как
+//! API у них нет.
+//!
+//! Весь интерфейс находится в [TClient](struct.TClient.html), хотя на самом деле
+//! разнесён по нескольким файлам.
+//!
+//! Большинство функций ~~нагло украдены~~ портированы с [tabun_api](https://github.com/andreymal/tabun_api)
+
 extern crate hyper;
 extern crate select;
 extern crate regex;
@@ -110,6 +120,7 @@ pub enum TabunError {
     NumError(StatusCode)
 }
 
+///Тип комментария для ответа
 pub enum CommentType {
     ///Комментарий к посту
     Post,
@@ -158,6 +169,7 @@ pub struct EditablePost {
     pub tags:           Vec<String>,
 }
 
+///Блоги из списка блогов в [профиле](struct.UserInfo.html)
 #[derive(Debug,Clone)]
 pub struct InBlogs {
     ///Созданные пользователем блоги
@@ -173,6 +185,8 @@ pub struct InBlogs {
     pub member: Vec<String>
 }
 
+
+///Профиль некоторого пользователя
 #[derive(Debug,Clone)]
 pub struct UserInfo {
     pub username:       String,
