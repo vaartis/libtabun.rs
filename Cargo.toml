@@ -5,8 +5,7 @@ authors = ["TyanNN <tyannn@cocaine.ninja>"]
 
 [dependencies]
 hyper		= "0.8.1"
-multipart	= {version = "0.7.0", features = ["client"]}
+multipart	= {version = "0.7.0", default-features = false, features = ["client", "hyper"]}
 select		= "*"
 regex		= "*"
-cookie		= "0.2.5"
 unescape        = "*"

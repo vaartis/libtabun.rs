@@ -30,7 +30,6 @@
 extern crate hyper;
 extern crate select;
 extern crate regex;
-extern crate cookie;
 extern crate multipart;
 extern crate unescape;
 
@@ -43,7 +42,7 @@ use std::collections::HashMap;
 
 use hyper::client::Client;
 use hyper::client::request::Request;
-use hyper::header::{SetCookie,Cookie};
+use hyper::header::{CookieJar,SetCookie,Cookie};
 use hyper::status::StatusCode;
 
 use multipart::client::Multipart;
@@ -52,8 +51,6 @@ use std::io::Read;
 
 use select::document::Document;
 use select::predicate::{Class, Name, And, Attr};
-
-use cookie::CookieJar;
 
 macro_rules! map(
     { $($key:expr => $value:expr),+ } => {
