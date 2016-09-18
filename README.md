@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/TyanNN/libtabun.rs.svg?branch=master)](https://travis-ci.org/TyanNN/libtabun.rs)
+[![GPL Licence](https://badges.frapsoft.com/os/gpl/gpl.svg?v=103)](https://opensource.org/licenses/GPL-2.0/)  
 # libtabun.rs
 API для tabun.everypony.ru
 
@@ -14,7 +15,7 @@ cargo build
 ```
 # Документация
 
-Можно почитать [тут](https://kotobank.ch/~easy/tabun_docs/libtabun/) или собрать самому:
+Можно почитать [тут](https://kotobank.ch/~easy/libtabun/doc/libtabun/) или собрать самому:
 
 ```bash
 cargo doc
