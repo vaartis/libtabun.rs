@@ -22,10 +22,10 @@
 //! (и потенциально прочими сайтами на лайвстрите), так как
 //! API у них нет.
 //!
-//! Весь интерфейс находится в [TClient](struct.TClient.html), хотя на самом деле
+//! Весь интерфейс находится в [`TClient`](struct.TClient.html), хотя на самом деле
 //! разнесён по нескольким файлам.
 //!
-//! Большинство функций ~~нагло украдены~~ портированы с [tabun_api](https://github.com/andreymal/tabun_api)
+//! Большинство функций ~~нагло украдены~~ портированы с [`tabun_api`](https://github.com/andreymal/tabun_api)
 
 extern crate hyper;
 extern crate select;
