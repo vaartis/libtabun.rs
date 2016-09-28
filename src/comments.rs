@@ -37,19 +37,18 @@ impl<'a> TClient<'a> {
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.get_comments("/blog/lighthouse/157807.html");
     ///```
-    pub fn get_comments(&mut self,url: &str) -> Result<HashMap<u32,Comment>,TabunError> {
+    pub fn get_comments<'f, T: Into<Option<&'f str>>>(&mut self,url: T) -> Result<HashMap<u32,Comment>,TabunError> {
         let mut ret = HashMap::new();
-        let mut url = url.to_string();
 
-        let url = &(if url.is_empty() {
-            "/comments".to_owned()
-        } else {
-            if !url.starts_with('/') {
-                let old_url = url.clone();
-                url = "/".to_owned();
-                url.push_str(&old_url);
+        let url = &(match url.into() {
+            None    => "/comments".to_owned(),
+            Some(x) => {
+                if !x.starts_with('/') {
+                    format!("/{}",x)
+                } else {
+                    x.to_owned()
+                }
             }
-            url
         });
 
         let page = try!(self.get(url));

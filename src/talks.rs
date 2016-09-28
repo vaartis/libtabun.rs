@@ -72,7 +72,7 @@ impl<'a> TClient<'a> {
             .unwrap()
             .to_string();
 
-        let comments = try!(self.get_comments(&url));
+        let comments = try!(self.get_comments(url.as_str()));
 
         let users = page.find(Class("talk-recipients-header"))
             .find(Name("a"))

@@ -275,17 +275,20 @@ impl<'a> TClient<'a> {
     ///```no_run
     ///let mut user = libtabun::TClient::new("логин","пароль");
     ///```
-    pub fn new(login: &str, pass: &str) -> Result<TClient<'a>,TabunError> {
-        if login.is_empty() || pass.is_empty() {
-            return Ok(TClient{
-                name:               String::new(),
-                security_ls_key:    String::new(),
-                client:             Client::new(),
-                cookies:            CookieJar::new(format!("{:?}",std::time::SystemTime::now()).as_bytes()),
-            });
-        }
+    pub fn new<T: Into<Option<&'a str>>>(login: T, pass: T) -> Result<TClient<'a>,TabunError> {
+        let (login,pass) = match (login.into(),pass.into()) {
+            (None,None) | (None,_) | (_,None) => {
+                return Ok(TClient{
+                    name:               String::new(),
+                    security_ls_key:    String::new(),
+                    client:             Client::new(),
+                    cookies:            CookieJar::new(format!("{:?}",std::time::SystemTime::now()).as_bytes()),
+                });
+            },
+            (Some(login), Some(pass)) => (login,pass)
+        };
 
-        let mut user = TClient::new("","").unwrap();
+        let mut user = TClient::new(None,None).unwrap();
 
         let err_regex = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"").unwrap();
 
@@ -413,8 +416,11 @@ impl<'a> TClient<'a> {
     ///```no_run
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.get_profile("Orhideous");
-    pub fn get_profile(&mut self, name: &str) -> Result<UserInfo,TabunError> {
-        let name = if name.is_empty() { self.name.clone() } else { name.to_string() };
+    pub fn get_profile<'f, T: Into<Option<&'f str>>>(&mut self, name: T) -> Result<UserInfo,TabunError> {
+        let name = match name.into() {
+            Some(x) => x.to_owned(),
+            None    => self.name.clone()
+        };
 
         let full_url = format!("/profile/{}", name);
         let page = try!(self.get(&full_url));

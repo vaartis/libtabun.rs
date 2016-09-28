@@ -160,11 +160,10 @@ impl<'a> TClient<'a> {
     /// //или
     ///user.get_post("",157198);
     ///```
-    pub fn get_post(&mut self,blog_name: &str,post_id: u32) -> Result<Post,TabunError>{
-        let res = if blog_name.is_empty() {
-            try!(self.get(&format!("/blog/{}.html",post_id)))
-        } else {
-            try!(self.get(&format!("/blog/{}/{}.html",blog_name,post_id)))
+    pub fn get_post<'f, T: Into<Option<&'f str>>>(&mut self,blog_name: T,post_id: u32) -> Result<Post,TabunError>{
+        let res = match blog_name.into() {
+            None    => try!(self.get(&format!("/blog/{}.html",post_id))),
+            Some(x) => try!(self.get(&format!("/blog/{}/{}.html",x,post_id)))
         };
 
         let post_title = res.find(And(Name("h1"),Class("topic-title")))
