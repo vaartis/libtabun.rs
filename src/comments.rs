@@ -208,7 +208,7 @@ mod test {
 
     #[test]
     fn test_get_comments() {
-        let mut user = TClient::new("","").unwrap();
+        let mut user = TClient::new(None,None).unwrap();
         match user.get_comments("/blog/news/67052.html") { //Старый пост Орхи
             Ok(x)   => {
                 assert!(x[&3927613].body.contains("нежданчик"));

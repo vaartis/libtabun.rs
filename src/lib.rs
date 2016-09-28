@@ -598,7 +598,7 @@ mod test {
 
     #[test]
     fn test_blog_id() {
-        let mut user = TClient::new("","").unwrap();
+        let mut user = TClient::new(None,None).unwrap();
         match user.get_blog_id("lighthouse") {
             Ok(x)   => assert_eq!(15558, x),
             Err(x)  => panic!(x)
@@ -607,7 +607,7 @@ mod test {
 
     #[test]
     fn test_get_profile() {
-        let mut user = TClient::new("","").unwrap();
+        let mut user = TClient::new(None,None).unwrap();
         match user.get_profile("OrHiDeOuS") {
             Ok(x)   => assert_eq!(x.username, "Orhideous"),
             Err(x)  => panic!(x)

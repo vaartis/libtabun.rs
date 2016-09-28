@@ -276,7 +276,7 @@ mod test {
 
     #[test]
     fn test_get_post() {
-        let mut user = TClient::new("","").unwrap();
+        let mut user = TClient::new(None,None).unwrap();
         match user.get_post("news",67052) {
             Ok(x)   => {
                 assert_eq!(x.author, "Orhideous");
