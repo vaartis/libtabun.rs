@@ -41,7 +41,7 @@ impl<'a> TClient<'a> {
     ///```
     pub fn add_post(&mut self, blog_id: u32, title: &str, body: &str, tags: &[&str]) -> Result<u32,TabunError> {
         let blog_id = blog_id.to_string();
-        let key = self.security_ls_key.clone();
+        let key = self.security_ls_key.to_owned();
         let tags = tags.iter().fold(String::new(), |acc, x| format!("{},{}", acc, x));
 
         let bd = map![
@@ -146,7 +146,7 @@ impl<'a> TClient<'a> {
         Ok(EditablePost{
             title:  title,
             body:   res.find(Attr("id","topic_text")).first().unwrap().text(),
-            tags:   tags.clone()
+            tags:   tags
         })
     }
 
@@ -223,7 +223,7 @@ impl<'a> TClient<'a> {
     ///```
     pub fn edit_post(&mut self, post_id: u32, blog_id: u32, title: &str, body: &str, tags: &[String], forbid_comment: bool) -> Result<u32,TabunError> {
         let blog_id = blog_id.to_string();
-        let key = self.security_ls_key.clone();
+        let key = self.security_ls_key.to_owned();
         let forbid_comment = if forbid_comment { "1" } else { "0" };
         let tags = tags.iter().fold(String::new(), |acc, x| format!("{},{}", acc, x));
 

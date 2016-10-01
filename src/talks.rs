@@ -99,7 +99,7 @@ impl<'a> TClient<'a> {
     pub fn add_talk(&mut self, users: &[&str], title: &str, body:&str ) -> Result<u32,TalkError> {
 
         let users = users.iter().fold(String::new(),|acc, x| format!("{},{}",acc, x));
-        let key = self.security_ls_key.clone();
+        let key = self.security_ls_key.to_owned();
 
         let fields = map![
             "submit_talk_add" => "Отправить",

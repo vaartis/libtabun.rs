@@ -177,7 +177,7 @@ impl<'a> TClient<'a> {
         let subscribed = if subscribed { "1" } else { "0" };
 
         let post_id = post_id.to_string();
-        let key = self.security_ls_key.clone();
+        let key = self.security_ls_key.to_owned();
 
         let body = map![
         "target_type"       =>  "topic_new_comment",

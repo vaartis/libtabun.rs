@@ -374,14 +374,14 @@ impl<'a> TClient<'a> {
 
     ///Загружает картинку по URL, попутно вычищая табуновские бэкслэши из ответа
     pub fn upload_image_from_url(&mut self, url: &str) -> Result<String,TabunError>{
-        let key = self.security_ls_key.clone();
+        let key = self.security_ls_key.to_owned();
         let url_regex = Regex::new(r"img src=\\&quot;(.+)\\&quot;").unwrap();
         let mut res_s = String::new();
         let mut res = try!(self.multipart("/ajax/upload/image", map!["title" => "", "img_url" => url, "security_ls_key" => &key]));
         let _ = res.read_to_string(&mut res_s);
         if let Some(x) = url_regex.captures(&res_s) { Ok(x.at(1).unwrap().to_owned()) } else {
             let err_regex = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"").unwrap();
-            let s = res_s.clone();
+            let s = res_s.to_owned();
             let err = err_regex.captures(&s).unwrap();
             Err(TabunError::Error(
                     unescape!(err.at(1).unwrap()),
@@ -419,7 +419,7 @@ impl<'a> TClient<'a> {
     pub fn get_profile<'f, T: Into<Option<&'f str>>>(&mut self, name: T) -> Result<UserInfo,TabunError> {
         let name = match name.into() {
             Some(x) => x.to_owned(),
-            None    => self.name.clone()
+            None    => self.name.to_owned()
         };
 
         let full_url = format!("/profile/{}", name);
@@ -522,8 +522,7 @@ impl<'a> TClient<'a> {
             if !a.contains("Инфо") {
                  let a = a.split('(').collect::<Vec<_>>();
                  if a.len() >1 {
-                     let val = a[1].to_string()
-                         .replace(")","")
+                     let val = a[1].replace(")","")
                          .parse::<u32>()
                          .unwrap();
                      if a[0].contains(&"Публикации") {
@@ -556,7 +555,7 @@ impl<'a> TClient<'a> {
     ///Добавляет что-то в избранное, true - коммент, false - пост
     fn favourite(&mut self, id: u32, typ: bool, fn_typ: bool) -> Result<u32, TabunError> {
         let id = id.to_string();
-        let key = self.security_ls_key.clone();
+        let key = self.security_ls_key.to_owned();
 
         let body = map![
         if fn_typ { "idComment"} else { "idTopic" } => id.as_str(),
