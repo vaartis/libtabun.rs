@@ -2,6 +2,7 @@
 [![GPL Licence](https://badges.frapsoft.com/os/gpl/gpl.svg?v=103)](https://opensource.org/licenses/GPL-2.0/)  
 # libtabun.rs
 API для tabun.everypony.ru
+<sub>Точно работает на nightly версии rust, насчёт стабильной не знаю, смотрите на Travis</sub>
 
 # Установка
 
