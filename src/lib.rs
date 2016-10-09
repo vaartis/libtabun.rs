@@ -263,7 +263,7 @@ impl Display for UserInfo {
     }
 }
 
-///URL сайта. Ибо по идее может работать и с другими штуками ня лайвстрите
+///URL сайта. Ибо по идее может работать и с другими штуками на лайвстрите
 pub const HOST_URL: &'static str = "https://tabun.everypony.ru";
 
 impl<'a> TClient<'a> {
