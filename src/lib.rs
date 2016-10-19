@@ -30,6 +30,7 @@
 extern crate hyper;
 extern crate select;
 extern crate regex;
+extern crate url;
 extern crate multipart;
 extern crate unescape;
 
@@ -42,8 +43,11 @@ use std::collections::HashMap;
 
 use hyper::client::Client;
 use hyper::client::request::Request;
-use hyper::header::{CookieJar,SetCookie,Cookie};
+use hyper::header::{CookieJar,SetCookie,Cookie,ContentType};
+use hyper::mime::{Mime, TopLevel, SubLevel};
 use hyper::status::StatusCode;
+
+use url::form_urlencoded;
 
 use multipart::client::Multipart;
 
@@ -276,56 +280,24 @@ impl<'a> TClient<'a> {
     ///let mut user = libtabun::TClient::new("логин","пароль");
     ///```
     pub fn new<T: Into<Option<&'a str>>>(login: T, pass: T) -> Result<TClient<'a>,TabunError> {
-        let (login,pass) = match (login.into(),pass.into()) {
-            (None,None) | (None,_) | (_,None) => {
-                return Ok(TClient{
-                    name:               String::new(),
-                    security_ls_key:    String::new(),
-                    client:             Client::new(),
-                    cookies:            CookieJar::new(format!("{:?}",std::time::SystemTime::now()).as_bytes()),
-                });
-            },
-            (Some(login), Some(pass)) => (login,pass)
+        let mut user = TClient{
+            name:               String::new(),
+            security_ls_key:    String::new(),
+            client:             Client::new(),
+            cookies:            CookieJar::new(format!("{:?}",std::time::SystemTime::now()).as_bytes()),
         };
-
-        let mut user = TClient::new(None,None).unwrap();
-
-        let err_regex = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"").unwrap();
 
         let ls_key_regex = Regex::new(r"LIVESTREET_SECURITY_KEY = '(.+)'").unwrap();
 
         let page = try!(user.get(&"/login".to_owned()))
             .find(Name("html")).first().unwrap().html();
-
         user.security_ls_key = ls_key_regex.captures(&page).unwrap().at(1).unwrap().to_owned();
 
-        let added_url = format!("/login/ajax-login?login={login}&password={pass}&security_ls_key={key}",
-                                login = login,
-                                pass = pass,
-                                key = user.security_ls_key);
-
-        let res = try!(user.get(&added_url))
-            .nth(0).unwrap().text();
-        let res = res.as_str();
-
-
-        if res.contains("Hacking") {
-            Err(TabunError::HackingAttempt)
-        } else if err_regex.is_match(res) {
-            let err = err_regex.captures(res).unwrap();
-            Err(TabunError::Error(
-                    unescape!(err.at(1).unwrap()),
-                    unescape!(err.at(2).unwrap())))
-        } else {
-
-            user.name = try!(user.get(&"".to_owned()))
-                .find(Class("username"))
-                .first()
-                .unwrap()
-                .text();
-
-            Ok(user)
+        if let (Some(login), Some(pass)) = (login.into(), pass.into()) {
+            try!(user.login(login, pass));
         }
+
+        Ok(user)
     }
 
     ///Заметка себе: создаёт промежуточный объект запроса, сразу выставляя печеньки,
@@ -353,6 +325,29 @@ impl<'a> TClient<'a> {
         Ok(Document::from(&*buf))
     }
 
+    fn post_urlencoded(&mut self, url: &str, bd: HashMap<&str, &str>) -> Result<hyper::client::Response, StatusCode> {
+        let url = format!("{}{}", HOST_URL, url); //TODO: Заменить на concat_idents! когда он стабилизируется
+
+        let body = form_urlencoded::Serializer::new(String::new())
+            .extend_pairs(bd)
+            .finish();
+
+        let req = self.client.post(&url)
+            .header(Cookie::from_cookie_jar(&self.cookies))
+            .header(ContentType(Mime(TopLevel::Application, SubLevel::WwwFormUrlEncoded, vec![])))
+            .body(body.as_str());
+
+        let res = req.send().unwrap();
+
+        if let Some(x) = res.headers.get::<SetCookie>() {
+            x.apply_to_cookie_jar(&mut self.cookies);
+        }
+
+        if res.status != hyper::Ok && res.status != hyper::status::StatusCode::MovedPermanently { return Err(res.status) }
+
+        Ok(res)
+    }
+
     fn multipart(&mut self,url: &str, bd: HashMap<&str,&str>) -> Result<hyper::client::Response,StatusCode> {
         let url = format!("{}{}", HOST_URL, url); //TODO: Заменить на concat_idents! когда он стабилизируется
         let mut request = Request::new(hyper::method::Method::Post,
@@ -367,9 +362,52 @@ impl<'a> TClient<'a> {
 
         let res = req.send().unwrap();
 
+        if let Some(x) = res.headers.get::<SetCookie>() {
+            x.apply_to_cookie_jar(&mut self.cookies);
+        }
+
         if res.status != hyper::Ok && res.status != hyper::status::StatusCode::MovedPermanently { return Err(res.status) }
 
         Ok(res)
+    }
+
+    ///Логинится с указанными именем пользователя и паролем
+    pub fn login(&mut self, login: &str, pass: &str) -> Result<(), TabunError> {
+        let err_regex = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"").unwrap();
+
+        let key = self.security_ls_key.to_owned();
+
+        let mut res = try!(self.post_urlencoded(
+            "/login/ajax-login",
+            map![
+                "login" => login,
+                "password" => pass,
+                "return-path" => HOST_URL,
+                "remember" => "on",
+                "security_ls_key" => &key
+            ]
+        ));
+
+        let mut bd = String::new();
+        res.read_to_string(&mut bd).unwrap();
+        let bd = bd.as_str();
+
+        if bd.contains("Hacking") {
+            Err(TabunError::HackingAttempt)
+        } else if err_regex.is_match(bd) {
+            let err = err_regex.captures(bd).unwrap();
+            Err(TabunError::Error(
+                    unescape!(err.at(1).unwrap()),
+                    unescape!(err.at(2).unwrap())))
+        } else {
+            self.name = try!(self.get(&"".to_owned()))
+                .find(Class("username"))
+                .first()
+                .unwrap()
+                .text();
+
+            Ok(())
+        }
     }
 
     ///Загружает картинку по URL, попутно вычищая табуновские бэкслэши из ответа
@@ -553,7 +591,7 @@ impl<'a> TClient<'a> {
     }
 
     ///Добавляет что-то в избранное, true - коммент, false - пост
-    fn favourite(&mut self, id: u32, typ: bool, fn_typ: bool) -> Result<u32, TabunError> {
+    pub fn favourite(&mut self, id: u32, typ: bool, fn_typ: bool) -> Result<u32, TabunError> {
         let id = id.to_string();
         let key = self.security_ls_key.to_owned();
 

@@ -4,8 +4,9 @@ version = "0.4.0"
 authors = ["TyanNN <tyannn@cocaine.ninja>"]
 
 [dependencies]
-hyper		= "0.8.1"
-multipart	= {version = "0.7.0", default-features = false, features = ["client", "hyper"]}
-select		= "*"
-regex		= "*"
-unescape        = "*"
+hyper          = "*"
+url            = "*"
+multipart      = "*"
+select         = "*"
+regex          = "*"
+unescape       = "*"
