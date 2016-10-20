@@ -639,8 +639,8 @@ mod test {
     #[test]
     fn test_blog_id() {
         let mut user = TClient::new(None,None).unwrap();
-        match user.get_blog_id("lighthouse") {
-            Ok(x)   => assert_eq!(15558, x),
+        match user.get_blog_id("herp_derp") {
+            Ok(x)   => assert_eq!(193, x),
             Err(x)  => panic!(x)
         }
     }
