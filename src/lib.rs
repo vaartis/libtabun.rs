@@ -591,7 +591,8 @@ impl<'a> TClient<'a> {
     }
 
     ///Добавляет что-то в избранное, true - коммент, false - пост
-    pub fn favourite(&mut self, id: u32, typ: bool, fn_typ: bool) -> Result<u32, TabunError> {
+    ///(внутренний метод для публичных favourite_post и favourite_comment)
+    fn favourite(&mut self, id: u32, typ: bool, fn_typ: bool) -> Result<u32, TabunError> {
         let id = id.to_string();
         let key = self.security_ls_key.to_owned();
 
