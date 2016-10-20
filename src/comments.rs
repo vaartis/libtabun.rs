@@ -19,8 +19,9 @@
 
 extern crate select;
 extern crate regex;
+extern crate unescape;
 
-use ::{unescape,TClient,Comment,TabunError,CommentType};
+use super::*;
 use select::predicate::{And,Class,Name};
 
 use std::collections::HashMap;
@@ -37,7 +38,7 @@ impl<'a> TClient<'a> {
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.get_comments("/blog/lighthouse/157807.html");
     ///```
-    pub fn get_comments<'f, T: Into<Option<&'f str>>>(&mut self,url: T) -> Result<HashMap<u32,Comment>,TabunError> {
+    pub fn get_comments<'f, T: Into<Option<&'f str>>>(&mut self,url: T) -> TabunResult<HashMap<u32,Comment>> {
         let mut ret = HashMap::new();
 
         let url = &(match url.into() {
@@ -143,7 +144,7 @@ impl<'a> TClient<'a> {
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.comment(1234,"Привет!", 0, libtabun::CommentType::Post);
     ///```
-    pub fn comment(&mut self,post_id: u32, body : &str, reply: u32, typ: CommentType) -> Result<u32,TabunError>{
+    pub fn comment(&mut self,post_id: u32, body : &str, reply: u32, typ: CommentType) -> TabunResult<u32>{
         let url = format!("/{typ}/ajaxaddcomment?security_ls_key={key}&cmt_target_id={post_id}&reply={reply}&comment_text={text}",
                           text      = body,
                           post_id   = post_id,
@@ -173,7 +174,7 @@ impl<'a> TClient<'a> {
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.comments_subscribe(157198,false);
     ///```
-    pub fn comments_subscribe(&mut self, post_id: u32, subscribed: bool) {
+    pub fn comments_subscribe(&mut self, post_id: u32, subscribed: bool) -> TabunResult<()> {
         let subscribed = if subscribed { "1" } else { "0" };
 
         let post_id = post_id.to_string();
@@ -187,7 +188,8 @@ impl<'a> TClient<'a> {
         "security_ls_key"   => &key
         ];
 
-        let _ = self.multipart("/subscribe/ajax-subscribe-toggle",body);
+        let _ = try!(self.multipart("/subscribe/ajax-subscribe-toggle",body));
+        Ok(())
     }
 
     ///Добавить комментарий в изранное или удалить его оттуда (true/false)
@@ -197,7 +199,7 @@ impl<'a> TClient<'a> {
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.favourite_comment(12345, true);
     ///```
-    pub fn favourite_comment(&mut self, id: u32, typ: bool) -> Result<u32, TabunError> {
+    pub fn favourite_comment(&mut self, id: u32, typ: bool) -> TabunResult<u32> {
         self.favourite(id, typ, true)
     }
 }

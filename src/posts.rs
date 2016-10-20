@@ -21,7 +21,7 @@ extern crate regex;
 extern crate select;
 extern crate hyper;
 
-use ::{TClient,TabunError,Post,EditablePost,HOST_URL};
+use super::*;
 
 use select::predicate::{Name,Class,Attr,And};
 use hyper::header::Referer;
@@ -39,7 +39,7 @@ impl<'a> TClient<'a> {
     ///let blog_id = user.get_blog_id("computers").unwrap();
     ///user.add_post(blog_id,"Название поста","Текст поста",&vec!["тэг раз","тэг два"]);
     ///```
-    pub fn add_post(&mut self, blog_id: u32, title: &str, body: &str, tags: &[&str]) -> Result<u32,TabunError> {
+    pub fn add_post(&mut self, blog_id: u32, title: &str, body: &str, tags: &[&str]) -> TabunResult<u32> {
         let blog_id = blog_id.to_string();
         let key = self.security_ls_key.to_owned();
         let tags = tags.iter().fold(String::new(), |acc, x| format!("{},{}", acc, x));
@@ -67,7 +67,7 @@ impl<'a> TClient<'a> {
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.get_posts("lighthouse",1);
     ///```
-    pub fn get_posts(&mut self, blog_name: &str, page: u32) -> Result<Vec<Post>,TabunError>{
+    pub fn get_posts(&mut self, blog_name: &str, page: u32) -> TabunResult<Vec<Post>> {
         let res = try!(self.get(&format!("/blog/{}/page{}", blog_name, page)));
         let mut ret = Vec::new();
 
@@ -133,7 +133,7 @@ impl<'a> TClient<'a> {
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.get_editable_post(1111);
     ///```
-    pub fn get_editable_post(&mut self, post_id: u32) -> Result<EditablePost,TabunError> {
+    pub fn get_editable_post(&mut self, post_id: u32) -> TabunResult<EditablePost> {
         let res = try!(self.get(&format!("/topic/edit/{}",post_id)));
 
         let title = res.find(Attr("id","topic_title")).first().unwrap();
@@ -160,7 +160,7 @@ impl<'a> TClient<'a> {
     /// //или
     ///user.get_post("",157198);
     ///```
-    pub fn get_post<'f, T: Into<Option<&'f str>>>(&mut self,blog_name: T,post_id: u32) -> Result<Post,TabunError>{
+    pub fn get_post<'f, T: Into<Option<&'f str>>>(&mut self,blog_name: T,post_id: u32) -> TabunResult<Post>{
         let res = match blog_name.into() {
             None    => try!(self.get(&format!("/blog/{}.html",post_id))),
             Some(x) => try!(self.get(&format!("/blog/{}/{}.html",x,post_id)))
@@ -221,7 +221,7 @@ impl<'a> TClient<'a> {
     ///let blog_id = user.get_blog_id("computers").unwrap();
     ///user.edit_post(157198,blog_id,"Новое название", "Новый текст", &vec!["тэг".to_string()],false);
     ///```
-    pub fn edit_post(&mut self, post_id: u32, blog_id: u32, title: &str, body: &str, tags: &[String], forbid_comment: bool) -> Result<u32,TabunError> {
+    pub fn edit_post(&mut self, post_id: u32, blog_id: u32, title: &str, body: &str, tags: &[String], forbid_comment: bool) -> TabunResult<u32> {
         let blog_id = blog_id.to_string();
         let key = self.security_ls_key.to_owned();
         let forbid_comment = if forbid_comment { "1" } else { "0" };
@@ -248,7 +248,7 @@ impl<'a> TClient<'a> {
 
     ///Удаляет пост, и, так как табун ничего не возаращет по этому поводу,
     ///выдаёт `Ok(())` в случае удачи
-    pub fn delete_post(&mut self, post_id: u32) -> Result<(),TabunError> {
+    pub fn delete_post(&mut self, post_id: u32) -> TabunResult<()> {
         let url = format!("/topic/delete/{}/?security_ls_key={}", post_id ,&self.security_ls_key);
         match self.create_middle_req(&url)
             .header(Referer(format!("{}/blog/{}.html", HOST_URL, post_id)))
@@ -265,7 +265,7 @@ impl<'a> TClient<'a> {
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.favourite_post(12345, true);
     ///```
-    pub fn favourite_post(&mut self, id: u32, typ: bool) -> Result<u32, TabunError> {
+    pub fn favourite_post(&mut self, id: u32, typ: bool) -> TabunResult<u32> {
         self.favourite(id, typ, false)
     }
 }

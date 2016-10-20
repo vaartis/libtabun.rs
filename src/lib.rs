@@ -270,6 +270,8 @@ impl Display for UserInfo {
 ///URL сайта. Ибо по идее может работать и с другими штуками на лайвстрите
 pub const HOST_URL: &'static str = "https://tabun.everypony.ru";
 
+pub type TabunResult<T> = Result<T,TabunError>;
+
 impl<'a> TClient<'a> {
 
     ///Входит на табунчик и сохраняет LIVESTREET_SECURITY_KEY,
@@ -279,7 +281,7 @@ impl<'a> TClient<'a> {
     ///```no_run
     ///let mut user = libtabun::TClient::new("логин","пароль");
     ///```
-    pub fn new<T: Into<Option<&'a str>>>(login: T, pass: T) -> Result<TClient<'a>,TabunError> {
+    pub fn new<T: Into<Option<&'a str>>>(login: T, pass: T) -> TabunResult<TClient<'a>> {
         let mut user = TClient{
             name:               String::new(),
             security_ls_key:    String::new(),
@@ -372,7 +374,7 @@ impl<'a> TClient<'a> {
     }
 
     ///Логинится с указанными именем пользователя и паролем
-    pub fn login(&mut self, login: &str, pass: &str) -> Result<(), TabunError> {
+    pub fn login(&mut self, login: &str, pass: &str) -> TabunResult<()> {
         let err_regex = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"").unwrap();
 
         let key = self.security_ls_key.to_owned();
@@ -411,7 +413,7 @@ impl<'a> TClient<'a> {
     }
 
     ///Загружает картинку по URL, попутно вычищая табуновские бэкслэши из ответа
-    pub fn upload_image_from_url(&mut self, url: &str) -> Result<String,TabunError>{
+    pub fn upload_image_from_url(&mut self, url: &str) -> TabunResult<String> {
         let key = self.security_ls_key.to_owned();
         let url_regex = Regex::new(r"img src=\\&quot;(.+)\\&quot;").unwrap();
         let mut res_s = String::new();
@@ -435,7 +437,7 @@ impl<'a> TClient<'a> {
     ///let blog_id = user.get_blog_id("lighthouse").unwrap();
     ///assert_eq!(blog_id,15558);
     ///```
-    pub fn get_blog_id(&mut self,name: &str) -> Result<u32,TabunError> {
+    pub fn get_blog_id(&mut self,name: &str) -> TabunResult<u32> {
         let url = format!("/blog/{}", name);
         let page = try!(self.get(&url));
 
@@ -454,7 +456,7 @@ impl<'a> TClient<'a> {
     ///```no_run
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.get_profile("Orhideous");
-    pub fn get_profile<'f, T: Into<Option<&'f str>>>(&mut self, name: T) -> Result<UserInfo,TabunError> {
+    pub fn get_profile<'f, T: Into<Option<&'f str>>>(&mut self, name: T) -> TabunResult<UserInfo> {
         let name = match name.into() {
             Some(x) => x.to_owned(),
             None    => self.name.to_owned()
@@ -592,7 +594,7 @@ impl<'a> TClient<'a> {
 
     ///Добавляет что-то в избранное, true - коммент, false - пост
     ///(внутренний метод для публичных favourite_post и favourite_comment)
-    fn favourite(&mut self, id: u32, typ: bool, fn_typ: bool) -> Result<u32, TabunError> {
+    fn favourite(&mut self, id: u32, typ: bool, fn_typ: bool) -> TabunResult<u32> {
         let id = id.to_string();
         let key = self.security_ls_key.to_owned();
 

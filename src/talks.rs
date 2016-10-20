@@ -20,7 +20,7 @@
 extern crate regex;
 extern crate hyper;
 
-use ::{TClient,TabunError,Talk,TalkItem,HOST_URL};
+use super::*;
 
 use select::predicate::{Class, Name, And};
 
@@ -49,7 +49,7 @@ impl<'a> TClient<'a> {
     ///```no_run
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.get_talk(123);
-    pub fn get_talk(&mut self, talk_id: u32) -> Result<Talk,TabunError>{
+    pub fn get_talk(&mut self, talk_id: u32) -> TabunResult<Talk>{
         let url = format!("/talk/read/{}", talk_id);
         let page = try!(self.get(&url));
 
@@ -125,7 +125,7 @@ impl<'a> TClient<'a> {
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.get_talks(1);
     ///```
-    pub fn get_talks(&mut self, page: u32) -> Result<Vec<TalkItem>, TabunError> {
+    pub fn get_talks(&mut self, page: u32) -> TabunResult<Vec<TalkItem>> {
         let res = try!(self.get(&format!("/talk/inbox/page{}", page)));
         let mut ret = Vec::new();
 
@@ -162,7 +162,7 @@ impl<'a> TClient<'a> {
 
     ///Удаляет цепочку сообщений, и, так как табун ничего не возаращет по этому поводу,
     ///выдаёт `Ok(())` в случае удачи
-    pub fn delete_talk(&mut self, talk_id: u32) -> Result<(),TabunError> {
+    pub fn delete_talk(&mut self, talk_id: u32) -> TabunResult<()> {
         let url = format!("/talk/delete/{}/?security_ls_key={}", talk_id ,&self.security_ls_key);
         match self.create_middle_req(&url)
             .header(Referer(format!("{}/talk/{}/", HOST_URL, talk_id)))
