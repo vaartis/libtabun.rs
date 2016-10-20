@@ -247,13 +247,13 @@ impl<'a> TClient<'a> {
     }
 
     ///Удаляет пост, и, так как табун ничего не возаращет по этому поводу,
-    ///выдаёт Ok(true) в случае удачи
-    pub fn delete_post(&mut self, post_id: u32) -> Result<bool,TabunError> {
+    ///выдаёт `Ok(())` в случае удачи
+    pub fn delete_post(&mut self, post_id: u32) -> Result<(),TabunError> {
         let url = format!("/topic/delete/{}/?security_ls_key={}", post_id ,&self.security_ls_key);
         match self.create_middle_req(&url)
             .header(Referer(format!("{}/blog/{}.html", HOST_URL, post_id)))
             .send().unwrap().status {
-                hyper::Ok => Ok(true),
+                hyper::Ok => Ok(()),
                 x => Err(TabunError::NumError(x))
             }
     }

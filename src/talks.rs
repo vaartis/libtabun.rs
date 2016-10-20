@@ -161,13 +161,13 @@ impl<'a> TClient<'a> {
     }
 
     ///Удаляет цепочку сообщений, и, так как табун ничего не возаращет по этому поводу,
-    ///выдаёт Ok(true) в случае удачи
-    pub fn delete_talk(&mut self, talk_id: u32) -> Result<bool,TabunError> {
+    ///выдаёт `Ok(())` в случае удачи
+    pub fn delete_talk(&mut self, talk_id: u32) -> Result<(),TabunError> {
         let url = format!("/talk/delete/{}/?security_ls_key={}", talk_id ,&self.security_ls_key);
         match self.create_middle_req(&url)
             .header(Referer(format!("{}/talk/{}/", HOST_URL, talk_id)))
             .send().unwrap().status {
-                hyper::Ok => Ok(true),
+                hyper::Ok => Ok(()),
                 x => Err(TabunError::NumError(x))
             }
     }
