@@ -6,7 +6,7 @@ authors = ["TyanNN <tyannn@cocaine.ninja>"]
 [dependencies]
 hyper          = "*"
 url            = "*"
-multipart      = "*"
+multipart      = {version = "*", default-features = false, features = ["client", "hyper"]}
 select         = "*"
 regex          = "*"
 unescape       = "*"
