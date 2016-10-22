@@ -118,7 +118,11 @@ pub enum TabunError {
     Error(String,String),
 
     ///Ошибка с номером, вроде 404 и 403
-    NumError(StatusCode)
+    NumError(StatusCode),
+
+    ///Ошибка HTTP или ошибка сети, которая может быть при плохом интернете
+    ///или лежачем Табуне
+    IoError(hyper::error::Error)
 }
 
 ///Тип комментария для ответа
@@ -249,6 +253,18 @@ impl From<StatusCode> for TabunError {
     }
 }
 
+impl From<hyper::error::Error> for TabunError {
+    fn from(x: hyper::error::Error) -> Self {
+        TabunError::IoError(x)
+    }
+}
+
+impl From<std::io::Error> for TabunError {
+    fn from(x: std::io::Error) -> Self {
+        TabunError::IoError(hyper::Error::Io(x))
+    }
+}
+
 impl Display for Comment {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "Comment({},\"{}\",\"{}\")", self.id, self.author, self.body)
@@ -310,15 +326,15 @@ impl<'a> TClient<'a> {
             .header(Cookie::from_cookie_jar(&self.cookies))
     }
 
-    fn get(&mut self,url: &str) -> Result<Document,StatusCode> {
-        let mut res = self.create_middle_req(url)
-            .send()
-            .unwrap();
+    fn get(&mut self,url: &str) -> Result<Document, TabunError> {
+        let mut res = try!(self.create_middle_req(url).send());
 
-        if res.status != hyper::Ok { return Err(res.status) }
+        if res.status != hyper::Ok {
+            return Err(TabunError::from(res.status));
+        }
 
         let mut buf = String::new();
-        res.read_to_string(&mut buf).unwrap();
+        try!(res.read_to_string(&mut buf));
 
         if let Some(x) = res.headers.get::<SetCookie>() {
             x.apply_to_cookie_jar(&mut self.cookies);
@@ -327,7 +343,7 @@ impl<'a> TClient<'a> {
         Ok(Document::from(&*buf))
     }
 
-    fn post_urlencoded(&mut self, url: &str, bd: HashMap<&str, &str>) -> Result<hyper::client::Response, StatusCode> {
+    fn post_urlencoded(&mut self, url: &str, bd: HashMap<&str, &str>) -> Result<hyper::client::Response, TabunError> {
         let url = format!("{}{}", HOST_URL, url); //TODO: Заменить на concat_idents! когда он стабилизируется
 
         let body = form_urlencoded::Serializer::new(String::new())
@@ -339,18 +355,20 @@ impl<'a> TClient<'a> {
             .header(ContentType(Mime(TopLevel::Application, SubLevel::WwwFormUrlEncoded, vec![])))
             .body(body.as_str());
 
-        let res = req.send().unwrap();
+        let res = try!(req.send());
 
         if let Some(x) = res.headers.get::<SetCookie>() {
             x.apply_to_cookie_jar(&mut self.cookies);
         }
 
-        if res.status != hyper::Ok && res.status != hyper::status::StatusCode::MovedPermanently { return Err(res.status) }
+        if res.status != hyper::Ok && res.status != hyper::status::StatusCode::MovedPermanently {
+            return Err(TabunError::from(res.status));
+        }
 
         Ok(res)
     }
 
-    fn multipart(&mut self,url: &str, bd: HashMap<&str,&str>) -> Result<hyper::client::Response,StatusCode> {
+    fn multipart(&mut self,url: &str, bd: HashMap<&str,&str>) -> Result<hyper::client::Response, TabunError> {
         let url = format!("{}{}", HOST_URL, url); //TODO: Заменить на concat_idents! когда он стабилизируется
         let mut request = Request::new(hyper::method::Method::Post,
                                hyper::Url::from_str(&url).unwrap()).unwrap();
@@ -362,13 +380,15 @@ impl<'a> TClient<'a> {
             let _ = req.write_text(param,val);
         }
 
-        let res = req.send().unwrap();
+        let res = try!(req.send());
 
         if let Some(x) = res.headers.get::<SetCookie>() {
             x.apply_to_cookie_jar(&mut self.cookies);
         }
 
-        if res.status != hyper::Ok && res.status != hyper::status::StatusCode::MovedPermanently { return Err(res.status) }
+        if res.status != hyper::Ok && res.status != hyper::status::StatusCode::MovedPermanently {
+            return Err(TabunError::from(res.status));
+        }
 
         Ok(res)
     }
@@ -391,7 +411,7 @@ impl<'a> TClient<'a> {
         ));
 
         let mut bd = String::new();
-        res.read_to_string(&mut bd).unwrap();
+        try!(res.read_to_string(&mut bd));
         let bd = bd.as_str();
 
         if bd.contains("Hacking") {
@@ -418,7 +438,7 @@ impl<'a> TClient<'a> {
         let url_regex = Regex::new(r"img src=\\&quot;(.+)\\&quot;").unwrap();
         let mut res_s = String::new();
         let mut res = try!(self.multipart("/ajax/upload/image", map!["title" => "", "img_url" => url, "security_ls_key" => &key]));
-        let _ = res.read_to_string(&mut res_s);
+        try!(res.read_to_string(&mut res_s));
         if let Some(x) = url_regex.captures(&res_s) { Ok(x.at(1).unwrap().to_owned()) } else {
             let err_regex = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"").unwrap();
             let s = res_s.to_owned();
@@ -609,7 +629,7 @@ impl<'a> TClient<'a> {
         if res.status != hyper::Ok { return Err(TabunError::NumError(res.status)) }
 
         let mut bd = String::new();
-        res.read_to_string(&mut bd).unwrap();
+        try!(res.read_to_string(&mut bd));
 
         if bd.contains("\"bStateError\":true") {
             let err = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"").unwrap().captures(&bd).unwrap();

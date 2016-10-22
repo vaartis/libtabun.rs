@@ -41,6 +41,12 @@ impl convert::From<hyper::status::StatusCode> for TalkError {
     }
 }
 
+impl convert::From<TabunError> for TalkError {
+    fn from(x: TabunError) -> TalkError {
+        TalkError::TabunError(x)
+    }
+}
+
 impl<'a> TClient<'a> {
 
     ///Получает личный диалог по его ID
