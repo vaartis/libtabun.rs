@@ -10,3 +10,4 @@ multipart      = {version = "*", default-features = false, features = ["client",
 select         = "*"
 regex          = "*"
 unescape       = "*"
+hado           = "*"

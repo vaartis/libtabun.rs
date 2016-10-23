@@ -33,6 +33,7 @@ extern crate regex;
 extern crate url;
 extern crate multipart;
 extern crate unescape;
+#[macro_use] extern crate hado;
 
 use std::fmt::Display;
 use std::str::FromStr;
@@ -75,10 +76,11 @@ macro_rules! parse_text_to_res(
     { $(regex => $regex:expr, st => $st:expr, num => $n:expr, typ => $typ:ty)+ } => {
         {
             $(
-                match Regex::new($regex).ok()
-                    .and_then(|x| x.captures($st))
-                    .and_then(|x| x.at($n))
-                    .and_then(|x| x.parse::<$typ>().ok()) {
+                match hado! {
+                    reg <- Regex::new($regex).ok();
+                    captures <- reg.captures($st);
+                    at <- captures.at($n);
+                    at.parse::<$typ>().ok() } {
                         Some(x) => Ok(x),
                         None    => unreachable!()
                     }
@@ -493,11 +495,12 @@ impl<'a> TClient<'a> {
         let url = format!("/blog/{}", name);
         let page = try!(self.get(&url));
 
-        Ok(page.find(And(Name("div"),Class("vote-item")))
-            .find(Name("span")).first()
-            .unwrap().attr("id")
-            .unwrap().split('_').collect::<Vec<_>>().last()
-            .unwrap().parse::<u32>().unwrap())
+        Ok(try_to_parse!(hado!{
+            el <- page.find(And(Name("div"),Class("vote-item"))).find(Name("span")).first();
+            id_s <- el.attr("id");
+            num_s <- id_s.split('_').last();
+            num_s.parse::<u32>().ok()
+        }))
     }
 
     ///Получает инфу о пользователе,
@@ -518,60 +521,40 @@ impl<'a> TClient<'a> {
         let page = try!(self.get(&full_url));
         let profile = page.find(And(Name("div"),Class("profile")));
 
-        let username = profile.find(And(Name("h2"),Attr("itemprop","nickname")))
-            .first()
-            .unwrap()
-            .text();
+        let username = try_to_parse!(
+                profile.find(And(Name("h2"),Attr("itemprop","nickname"))).first()
+            ).text();
 
-        let realname = match profile.find(And(Name("p"),Attr("itemprop","name")))
-            .first() {
+        let realname = match profile.find(And(Name("p"),Attr("itemprop","name"))).first() {
                 Some(x) => x.text(),
                 None => String::new()
+        };
+
+        let (skill,user_id) = try_to_parse!(hado!{
+            skill_area <- profile.find(And(Name("div"),Class("strength"))).find(Name("div")).first();
+            skill <- skill_area.text().parse::<f32>().ok();
+            user_id <- hado!{
+                id_s <- skill_area.attr("id");
+                elm <- id_s.split('_').collect::<Vec<_>>().get(2);
+                elm.parse::<u32>().ok()
             };
+            Some((skill,user_id))
+        });
 
-        let skill_area = profile.find(And(Name("div"),Class("strength")))
-            .find(Name("div"))
-            .first()
-            .unwrap();
-        let skill = skill_area
-            .text()
-            .parse::<f32>()
-            .unwrap();
+        let rating = try_to_parse!(hado!{
+            el <- profile.find(Class("vote-count")).find(Name("span")).first();
+            el.text().parse::<f32>().ok()
+        });
 
-        let user_id = skill_area
-            .attr("id")
-            .unwrap()
-            .split('_')
-            .collect::<Vec<_>>()[2]
-            .parse::<u32>()
-            .unwrap();
+        let about = try_to_parse!(page.find(And(Name("div"),Class("profile-info-about"))).first());
 
-        let rating = profile.find(Class("vote-count"))
-            .find(Name("span"))
-            .first()
-            .unwrap()
-            .text()
-            .parse::<f32>().unwrap();
+        let userpic = try_to_parse!(about.find(Class("avatar")).find(Name("img")).first());
+        let userpic = try_to_parse!(userpic.attr("src"));
 
-        let about = page.find(And(Name("div"),Class("profile-info-about")))
-            .first()
-            .unwrap();
-
-        let userpic = about.find(Class("avatar"))
-            .find(Name("img"))
-            .first()
-            .unwrap();
-        let userpic = userpic
-            .attr("src")
-            .unwrap();
-
-        let description = about.find(And(Name("div"),Class("text")))
-            .first()
-            .unwrap()
-            .inner_html();
+        let description = try_to_parse!(about.find(And(Name("div"),Class("text"))).first()).inner_html();
 
         let dotted = page.find(And(Name("ul"), Class("profile-dotted-list")));
-        let dotted = dotted.iter().last().unwrap().find(Name("li"));
+        let dotted = try_to_parse!(dotted.iter().last()).find(Name("li"));
 
         let mut other_info = HashMap::<String,String>::new();
 
@@ -581,8 +564,8 @@ impl<'a> TClient<'a> {
         let mut member= Vec::<String>::new();
 
         for li in dotted.iter() {
-            let name = li.find(Name("span")).first().unwrap().text();
-            let val = li.find(Name("strong")).first().unwrap();
+            let name = try_to_parse!(li.find(Name("span")).first()).text();
+            let val = try_to_parse!(li.find(Name("strong")).first());
 
             if name.contains("Создал"){
                 created = val.find(Name("a")).iter().map(|x| x.text()).collect::<Vec<_>>();
@@ -609,14 +592,13 @@ impl<'a> TClient<'a> {
         let (mut publications,mut favourites, mut friends) = (0,0,0);
 
         for li in nav.iter() {
-            let a = li.find(Name("a")).first().unwrap().text();
+            let a = try_to_parse!(li.find(Name("a")).first()).text();
 
             if !a.contains("Инфо") {
                  let a = a.split('(').collect::<Vec<_>>();
                  if a.len() >1 {
-                     let val = a[1].replace(")","")
-                         .parse::<u32>()
-                         .unwrap();
+                     let val = try_to_parse!(a[1].replace(")","")
+                         .parse::<u32>().ok());
                      if a[0].contains(&"Публикации") {
                          publications = val
                      } else if a[0].contains(&"Избранное") {

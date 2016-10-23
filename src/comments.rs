@@ -59,24 +59,20 @@ impl<'a> TClient<'a> {
         let url_regex = Regex::new(r"(\d+).html$").unwrap();
 
         for comm in comments.find(Class("comment")).iter() {
-            let post_id = if url == "/comments" {
-                let c = comm.find(Class("comment-path-topic"))
-                    .first()
-                    .unwrap();
-                url_regex.captures(c.attr("href").unwrap())
-                    .unwrap()
-                    .at(1)
-                    .unwrap()
-                    .parse::<u32>()
-                    .unwrap()
+            let post_id = try_to_parse!(if url == "/comments" {
+                hado!{
+                    c <- comm.find(Class("comment-path-topic")).first();
+                    capts <- url_regex.captures(c.attr("href").unwrap());
+                    at <- capts.at(1);
+                    at.parse::<u32>().ok()
+                }
             } else {
-                url_regex.captures(url)
-                    .unwrap()
-                    .at(1)
-                    .unwrap()
-                    .parse::<u32>()
-                    .unwrap()
-            };
+                hado!{
+                    cpts <- url_regex.captures(url);
+                    at <- cpts.at(1);
+                    at.parse::<u32>().ok()
+                }
+            });
 
             let id = match comm.find(And(Name("li"),Class("vote"))).first() {
                 Some(x) => x.attr("id").unwrap().split('_').collect::<Vec<_>>()[3].parse::<u32>().unwrap(),
