@@ -339,7 +339,7 @@ impl<'a> TClient<'a> {
             page.find(Name("html")).first()
         ).html();
 
-        user.security_ls_key = try_to_parse!(try_to_parse!(ls_key_regex.captures(&page)).at(1)).to_owned();
+        user.security_ls_key = ls_key_regex.captures(&page).unwrap().at(1).unwrap().to_owned();
 
         if let (Some(login), Some(pass)) = (login.into(), pass.into()) {
             try!(user.login(login, pass));
