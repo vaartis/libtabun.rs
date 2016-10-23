@@ -155,41 +155,29 @@ impl<'a> TClient<'a> {
             Some(x) => try!(self.get(&format!("/blog/{}/{}.html",x,post_id)))
         };
 
-        let post_title = res.find(And(Name("h1"),Class("topic-title")))
-            .first()
-            .unwrap()
-            .text();
+        let post_title = try_to_parse!(res.find(And(Name("h1"),Class("topic-title"))).first()).text();
 
-        let post_body = res.find(And(Name("div"),Class("topic-content")))
-            .first()
-            .unwrap()
-            .inner_html();
+        let post_body = try_to_parse!(res.find(And(Name("div"),Class("topic-content"))).first()).inner_html();
         let post_body = post_body.trim();
 
-        let post_date = res.find(And(Name("li"),Class("topic-info-date")))
-            .find(Name("time"))
-            .first()
-            .unwrap();
-        let post_date = post_date.attr("datetime")
-            .unwrap();
+        let post_date = try_to_parse!(res.find(And(Name("li"),Class("topic-info-date")))
+                                      .find(Name("time"))
+                                      .first());
+        let post_date = try_to_parse!(post_date.attr("datetime"));
 
-        let mut post_tags = Vec::new();
-        for t in res.find(And(Name("a"),Attr("rel","tag"))).iter() {
-            post_tags.push(t.text());
-        }
+        let post_tags = res.find(And(Name("a"),Attr("rel","tag"))).iter().fold(Vec::new(),|mut acc,t| {
+            acc.push(t.text());
+            acc
+        });
 
-        let cm_count = res.find(And(Name("span"),Attr("id","count-comments")))
-            .first()
-            .unwrap()
-            .text()
-            .parse::<u32>()
-            .unwrap();
+        let cm_count = try_to_parse!(hado!{
+            el <- res.find(And(Name("span"),Attr("id","count-comments"))).first();
+            el.text().parse::<u32>().ok()
+        });
 
-        let post_author = res.find(And(Name("div"),Class("topic-info")))
-            .find(And(Name("a"),Attr("rel","author")))
-            .first()
-            .unwrap()
-            .text();
+        let post_author = try_to_parse!(res.find(And(Name("div"),Class("topic-info")))
+                                        .find(And(Name("a"),Attr("rel","author")))
+                                        .first()).text();
 
         Ok(Post{
             title:          post_title,
