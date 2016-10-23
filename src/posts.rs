@@ -123,16 +123,18 @@ impl<'a> TClient<'a> {
     pub fn get_editable_post(&mut self, post_id: u32) -> TabunResult<EditablePost> {
         let res = try!(self.get(&format!("/topic/edit/{}",post_id)));
 
-        let title = res.find(Attr("id","topic_title")).first().unwrap();
-        let title = title.attr("value").unwrap().to_string();
+        let title = try_to_parse!(res.find(Attr("id","topic_title")).first());
+        let title = try_to_parse!(title.attr("value")).to_string();
 
-        let tags = res.find(Attr("id","topic_tags")).first().unwrap();
-        let tags = tags.attr("value").unwrap();
-        let tags = tags.split(',').map(|x| x.to_string()).collect::<Vec<String>>();
+        let body = try_to_parse!(res.find(Attr("id","topic_text")).first()).text();
+
+        let tags = try_to_parse!(res.find(Attr("id","topic_tags")).first());
+        let tags = try_to_parse!(tags.attr("value"))
+            .split(',').map(|x| x.to_string()).collect::<Vec<String>>();
 
         Ok(EditablePost{
             title:  title,
-            body:   res.find(Attr("id","topic_text")).first().unwrap().text(),
+            body:   body,
             tags:   tags
         })
     }
