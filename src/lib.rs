@@ -101,6 +101,26 @@ macro_rules! unescape(
     };
 );
 
+///Макрос для возвращения ошибок парсинга
+macro_rules! try_to_parse {
+    ( $expr: expr ) => {
+        match $expr {
+            Some(x) => x,
+            None => return Err(TabunError::ParseError(
+                String::from(file!()), line!(), String::from("Cannot parse page")
+            )),
+        }
+    };
+    ( $expr: expr, $msg: expr ) => {
+        match $expr {
+            Some(x) => x,
+            None => return Err(TabunError::ParseError(
+                String::from(file!()), line!(), String::from($msg)
+            )),
+        }
+    };
+}
+
 mod comments;
 mod posts;
 mod talks;
@@ -122,7 +142,12 @@ pub enum TabunError {
 
     ///Ошибка HTTP или ошибка сети, которая может быть при плохом интернете
     ///или лежачем Табуне
-    IoError(hyper::error::Error)
+    IoError(hyper::error::Error),
+
+    ///Ошибка парсинга страницы. Скорее всего будет возникать после изменения
+    ///вёрстки Табуна, поэтому имеет смысл сообщать об этой ошибке
+    ///разработчикам
+    ParseError(String, u32, String)
 }
 
 ///Тип комментария для ответа
@@ -307,9 +332,13 @@ impl<'a> TClient<'a> {
 
         let ls_key_regex = Regex::new(r"LIVESTREET_SECURITY_KEY = '(.+)'").unwrap();
 
-        let page = try!(user.get(&"/login".to_owned()))
-            .find(Name("html")).first().unwrap().html();
-        user.security_ls_key = ls_key_regex.captures(&page).unwrap().at(1).unwrap().to_owned();
+        let page = try!(user.get(&"/login".to_owned()));
+        let page = try_to_parse!(
+            page.find(Name("html")).first()
+        ).html();
+
+        user.security_ls_key = try_to_parse!(ls_key_regex.captures(&page))
+            .at(1).unwrap().to_owned();
 
         if let (Some(login), Some(pass)) = (login.into(), pass.into()) {
             try!(user.login(login, pass));
@@ -370,8 +399,10 @@ impl<'a> TClient<'a> {
 
     fn multipart(&mut self,url: &str, bd: HashMap<&str,&str>) -> Result<hyper::client::Response, TabunError> {
         let url = format!("{}{}", HOST_URL, url); //TODO: Заменить на concat_idents! когда он стабилизируется
-        let mut request = Request::new(hyper::method::Method::Post,
-                               hyper::Url::from_str(&url).unwrap()).unwrap();
+        let mut request = Request::new(
+            hyper::method::Method::Post,
+            hyper::Url::from_str(&url).unwrap()
+        ).unwrap();  // TODO: обработать нормально?
         request.headers_mut().set(Cookie::from_cookie_jar(&self.cookies));
 
         let mut req = Multipart::from_request(request).unwrap();
@@ -422,11 +453,10 @@ impl<'a> TClient<'a> {
                     unescape!(err.at(1).unwrap()),
                     unescape!(err.at(2).unwrap())))
         } else {
-            self.name = try!(self.get(&"".to_owned()))
-                .find(Class("username"))
-                .first()
-                .unwrap()
-                .text();
+            let page = try!(self.get(&"/".to_owned()));
+            self.name = try_to_parse!(
+                page.find(Class("username")).first()
+            ).text();
 
             Ok(())
         }
@@ -439,10 +469,12 @@ impl<'a> TClient<'a> {
         let mut res_s = String::new();
         let mut res = try!(self.multipart("/ajax/upload/image", map!["title" => "", "img_url" => url, "security_ls_key" => &key]));
         try!(res.read_to_string(&mut res_s));
-        if let Some(x) = url_regex.captures(&res_s) { Ok(x.at(1).unwrap().to_owned()) } else {
+        if let Some(x) = url_regex.captures(&res_s) {
+            Ok(x.at(1).unwrap().to_owned())
+        } else {
             let err_regex = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"").unwrap();
             let s = res_s.to_owned();
-            let err = err_regex.captures(&s).unwrap();
+            let err = try_to_parse!(err_regex.captures(&s));
             Err(TabunError::Error(
                     unescape!(err.at(1).unwrap()),
                     unescape!(err.at(2).unwrap())))
