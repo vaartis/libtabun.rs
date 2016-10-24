@@ -72,47 +72,34 @@ impl<'a> TClient<'a> {
         let mut ret = Vec::new();
 
         for p in res.find(Name("article")).iter() {
-            let post_id = p.find(And(Name("div"),Class("vote-topic")))
-                .first()
-                .unwrap()
-                .attr("id")
-                .unwrap()
-                .split('_').collect::<Vec<_>>()[3].parse::<u32>().unwrap();
+            let post_id = try_to_parse!(hado!{
+                el <- p.find(And(Name("div"),Class("vote-topic"))).first();
+                attr <- el.attr("id");
+                id_s <- attr.split('_').collect::<Vec<_>>().get(3);
+                id_s.parse::<u32>().ok()
+            });
 
-            let post_title = p.find(And(Name("h1"),Class("topic-title")))
-                .first()
-                .unwrap()
-                .text();
+            let post_title = try_to_parse!(p.find(And(Name("h1"),Class("topic-title"))).first()).text();
 
-            let post_body = p.find(And(Name("div"),Class("topic-content")))
-                .first()
-                .unwrap()
-                .inner_html();
+            let post_body = try_to_parse!(p.find(And(Name("div"),Class("topic-content"))).first()).inner_html();
             let post_body = post_body.trim();
 
-            let post_date = p.find(And(Name("li"),Class("topic-info-date")))
-                .find(Name("time"))
-                .first()
-                .unwrap();
-            let post_date = post_date.attr("datetime")
-                .unwrap();
+            let post_date = try_to_parse!(p.find(And(Name("li"),Class("topic-info-date"))).find(Name("time")).first());
+            let post_date = try_to_parse!(post_date.attr("datetime"));
 
-            let mut post_tags = Vec::new();
-            for t in res.find(And(Name("a"),Attr("rel","tag"))).iter() {
-                post_tags.push(t.text());
-            }
+            let post_tags = p.find(And(Name("a"),Attr("rel","tag"))).iter().fold(Vec::new(), |mut acc, x| {
+                acc.push(x.text());
+                acc
+            });
 
-            let cm_count = p.find(And(Name("li"),Class("topic-info-comments")))
-                .first()
-                .unwrap()
-                .find(Name("span")).first().unwrap().text()
-                .parse::<u32>().unwrap();
+            let cm_count = try_to_parse!(hado!{
+                el <- p.find(And(Name("li"),Class("topic-info-comments"))).first();
+                c_el <- el.find(Name("span")).first();
+                c_el.text().parse::<u32>().ok() });
 
-            let post_author = res.find(And(Name("div"),Class("topic-info")))
-                .find(And(Name("a"),Attr("rel","author")))
-                .first()
-                .unwrap()
-                .text();
+            let post_author = try_to_parse!(p.find(And(Name("div"),Class("topic-info")))
+                                            .find(And(Name("a"),Attr("rel","author")))
+                                            .first()).text();
             ret.push(
                 Post{
                     title:          post_title,
@@ -136,16 +123,18 @@ impl<'a> TClient<'a> {
     pub fn get_editable_post(&mut self, post_id: u32) -> TabunResult<EditablePost> {
         let res = try!(self.get(&format!("/topic/edit/{}",post_id)));
 
-        let title = res.find(Attr("id","topic_title")).first().unwrap();
-        let title = title.attr("value").unwrap().to_string();
+        let title = try_to_parse!(res.find(Attr("id","topic_title")).first());
+        let title = try_to_parse!(title.attr("value")).to_string();
 
-        let tags = res.find(Attr("id","topic_tags")).first().unwrap();
-        let tags = tags.attr("value").unwrap();
-        let tags = tags.split(',').map(|x| x.to_string()).collect::<Vec<String>>();
+        let body = try_to_parse!(res.find(Attr("id","topic_text")).first()).text();
+
+        let tags = try_to_parse!(res.find(Attr("id","topic_tags")).first());
+        let tags = try_to_parse!(tags.attr("value"))
+            .split(',').map(|x| x.to_string()).collect::<Vec<String>>();
 
         Ok(EditablePost{
             title:  title,
-            body:   res.find(Attr("id","topic_text")).first().unwrap().text(),
+            body:   body,
             tags:   tags
         })
     }
@@ -166,41 +155,29 @@ impl<'a> TClient<'a> {
             Some(x) => try!(self.get(&format!("/blog/{}/{}.html",x,post_id)))
         };
 
-        let post_title = res.find(And(Name("h1"),Class("topic-title")))
-            .first()
-            .unwrap()
-            .text();
+        let post_title = try_to_parse!(res.find(And(Name("h1"),Class("topic-title"))).first()).text();
 
-        let post_body = res.find(And(Name("div"),Class("topic-content")))
-            .first()
-            .unwrap()
-            .inner_html();
+        let post_body = try_to_parse!(res.find(And(Name("div"),Class("topic-content"))).first()).inner_html();
         let post_body = post_body.trim();
 
-        let post_date = res.find(And(Name("li"),Class("topic-info-date")))
-            .find(Name("time"))
-            .first()
-            .unwrap();
-        let post_date = post_date.attr("datetime")
-            .unwrap();
+        let post_date = try_to_parse!(res.find(And(Name("li"),Class("topic-info-date")))
+                                      .find(Name("time"))
+                                      .first());
+        let post_date = try_to_parse!(post_date.attr("datetime"));
 
-        let mut post_tags = Vec::new();
-        for t in res.find(And(Name("a"),Attr("rel","tag"))).iter() {
-            post_tags.push(t.text());
-        }
+        let post_tags = res.find(And(Name("a"),Attr("rel","tag"))).iter().fold(Vec::new(),|mut acc,t| {
+            acc.push(t.text());
+            acc
+        });
 
-        let cm_count = res.find(And(Name("span"),Attr("id","count-comments")))
-            .first()
-            .unwrap()
-            .text()
-            .parse::<u32>()
-            .unwrap();
+        let cm_count = try_to_parse!(hado!{
+            el <- res.find(And(Name("span"),Attr("id","count-comments"))).first();
+            el.text().parse::<u32>().ok()
+        });
 
-        let post_author = res.find(And(Name("div"),Class("topic-info")))
-            .find(And(Name("a"),Attr("rel","author")))
-            .first()
-            .unwrap()
-            .text();
+        let post_author = try_to_parse!(res.find(And(Name("div"),Class("topic-info")))
+                                        .find(And(Name("a"),Attr("rel","author")))
+                                        .first()).text();
 
         Ok(Post{
             title:          post_title,

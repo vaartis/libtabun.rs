@@ -74,12 +74,21 @@ impl<'a> TClient<'a> {
                 }
             });
 
-            let id = match comm.find(And(Name("li"),Class("vote"))).first() {
-                Some(x) => x.attr("id").unwrap().split('_').collect::<Vec<_>>()[3].parse::<u32>().unwrap(),
-                None => comm.attr("id").unwrap().split('_').collect::<Vec<_>>()[2].parse::<u32>().unwrap()
-            };
+            let id = try_to_parse!(match comm.find(And(Name("li"),Class("vote"))).first() {
+                Some(x) => hado!{
+                    attr <- x.attr("id");
+                    id_s <- attr.split('_').collect::<Vec<_>>().get(3);
+                    id_s.parse::<u32>().ok()
+                },
+                None => hado!{
+                    attr <- comm.attr("id");
+                    id_s <- attr.split('_').collect::<Vec<_>>().get(2);
+                    id_s.parse::<u32>().ok()
+                }
+            });
 
-            if comm.attr("class").unwrap().contains("comment-bad") || comm.attr("class").unwrap().contains("comment-deleted") {
+            let cl = try_to_parse!(comm.attr("class"));
+            if cl.contains("comment-bad") || cl.contains("comment-deleted") {
                 ret.insert(id,Comment{
                     body:       String::new(),
                     id:         id,
@@ -95,26 +104,25 @@ impl<'a> TClient<'a> {
 
             let parent = match comm.find(Class("goto-comment-parent")).first() {
                 Some(x) => {
-                    let c = x.find(Name("a")).first().unwrap();
-                    let c = c.attr("href").unwrap().split('/').collect::<Vec<_>>();
-                    c[c.len()-1].parse::<u32>().unwrap() },
+                    try_to_parse!(hado!{
+                        el <- x.find(Name("a")).first();
+                        attr <- el.attr("href");
+                        pr_s <- attr.split('/').collect::<Vec<_>>().last();
+                        pr_s.parse::<u32>().ok()
+                    })},
                 None => 0
             };
 
-            let text = comm.find(And(Name("div"),Class("text"))).first().unwrap().inner_html();
-            let text = text.as_str();
+            let text = try_to_parse!(comm.find(And(Name("div"),Class("text"))).first()).inner_html();
 
-            let author = comm.find(And(Name("li"),Class("comment-author")))
-                .find(Name("a"))
-                .first()
-                .unwrap();
-            let author = author.attr("href").unwrap().split('/').collect::<Vec<_>>()[4];
+            let author = try_to_parse!(comm.find(And(Name("li"),Class("comment-author"))).find(Name("a")).first());
+            let author = try_to_parse!(author.attr("href")).split('/').collect::<Vec<_>>()[4];
 
-            let date = comm.find(Name("time")).first().unwrap();
-            let date = date.attr("datetime").unwrap();
+            let date = try_to_parse!(comm.find(Name("time")).first());
+            let date = try_to_parse!(date.attr("datetime"));
 
             let votes = match comm.find(And(Name("span"),Class("vote-count"))).first() {
-                Some(x) => x.text().parse::<i32>().unwrap(),
+                Some(x) => try_to_parse!(x.text().parse::<i32>().ok()),
                 None    => 0
             };
 
