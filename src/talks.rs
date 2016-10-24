@@ -59,24 +59,15 @@ impl<'a> TClient<'a> {
         let url = format!("/talk/read/{}", talk_id);
         let page = try!(self.get(&url));
 
-        let title = page.find(Class("topic-title"))
-            .first()
-            .unwrap()
-            .text();
+        let title = try_to_parse!(page.find(Class("topic-title")).first()).text();
 
-        let body = page.find(Class("topic-content"))
-            .first()
-            .unwrap()
-            .inner_html();
+        let body = try_to_parse!(page.find(Class("topic-content")).first()).inner_html();
         let body = body.trim().to_string();
 
-        let date = page.find(And(Name("li"),Class("topic-info-date")))
-            .find(Name("time"))
-            .first()
-            .unwrap();
-        let date = date.attr("datetime")
-            .unwrap()
-            .to_string();
+        let date = try_to_parse!(page.find(And(Name("li"),Class("topic-info-date")))
+                                 .find(Name("time"))
+                                 .first());
+        let date = try_to_parse!(date.attr("datetime")).to_string();
 
         let comments = try!(self.get_comments(url.as_str()));
 
@@ -138,17 +129,13 @@ impl<'a> TClient<'a> {
         let res = res.find(Name("tbody"));
 
         for p in res.find(Name("tr")).iter() {
-            let talk_id = p.find(And(Name("a"), Class("js-title-talk")))
-                .first()
-                .unwrap()
-                .attr("href")
-                .unwrap()
-                .split('/').collect::<Vec<_>>()[5].parse::<u32>().unwrap();
+            let talk_id = try_to_parse!(hado!{
+                el <- p.find(And(Name("a"), Class("js-title-talk"))).first();
+                attr <- el.attr("href");
+                attr.split('/').collect::<Vec<_>>()[5].parse::<u32>().ok()
+            });
 
-            let talk_title = p.find(And(Name("a"), Class("js-title-talk")))
-                .first()
-                .unwrap()
-                .text();
+            let talk_title = try_to_parse!(p.find(And(Name("a"), Class("js-title-talk"))).first()).text();
 
             let talk_users = p.find(And(Name("td"), Class("cell-recipients")))
                 .find(And(Name("a"), Class("username")))
