@@ -149,26 +149,25 @@ impl<'a> TClient<'a> {
     ///user.comment(1234,"Привет!", 0, libtabun::CommentType::Post);
     ///```
     pub fn comment(&mut self,post_id: u32, body : &str, reply: u32, typ: CommentType) -> TabunResult<u32>{
-        let url = format!("/{typ}/ajaxaddcomment?security_ls_key={key}&cmt_target_id={post_id}&reply={reply}&comment_text={text}",
-                          text      = body,
-                          post_id   = post_id,
-                          reply     = reply,
-                          typ       = match typ { CommentType::Post => "blog", CommentType::Talk => "talk" },
-                          key       = self.security_ls_key);
+        let s_post_id = post_id.to_string();
+        let s_reply = reply.to_string();
 
-        let res = try!(self.get(&url));
+        let data = try!(self.ajax(
+            &format!(
+                "/{}/ajaxaddcomment/",
+                match typ { CommentType::Post => "blog", CommentType::Talk => "talk" }
+            ),
+            map![
+                "comment_text" => body,
+                "cmt_target_id" => s_post_id.as_str(),
+                "reply" => s_reply.as_str()
+            ]
+        ));
 
-        let res = res.nth(0).unwrap().text();
-        let res = res.as_str();
-
-        if let Ok(x) = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"") {
-            let err = x.captures(res).unwrap();
-            return Err(TabunError::Error(
-                    unescape!(err.at(1).unwrap()),
-                    unescape!(err.at(2).unwrap())));
+        match get_json!(data, "/sCommentId", as_u64) {
+            Some(comment_id) => Ok(comment_id as u32),
+            None => Err(parse_error!("Server did not return sCommentId"))
         }
-
-        parse_text_to_res!(regex => "\"sCommentId\":(\\d+)", st => res, num => 1, typ => u32 )
     }
 
     ///Подписаться/отписаться от комментариев к посту.
@@ -181,18 +180,16 @@ impl<'a> TClient<'a> {
     pub fn comments_subscribe(&mut self, post_id: u32, subscribed: bool) -> TabunResult<()> {
         let subscribed = if subscribed { "1" } else { "0" };
 
-        let post_id = post_id.to_string();
-        let key = self.security_ls_key.to_owned();
+        let s_post_id = post_id.to_string();
 
         let body = map![
-        "target_type"       =>  "topic_new_comment",
-        "target_id"         =>  post_id.as_str(),
-        "value"             =>  subscribed,
-        "mail"              =>  "",
-        "security_ls_key"   => &key
+            "target_type"       =>  "topic_new_comment",
+            "target_id"         =>  s_post_id.as_str(),
+            "value"             =>  subscribed,
+            "mail"              =>  ""
         ];
 
-        let _ = try!(self.multipart("/subscribe/ajax-subscribe-toggle",body));
+        try!(self.ajax("/subscribe/ajax-subscribe-toggle", body));
         Ok(())
     }
 
