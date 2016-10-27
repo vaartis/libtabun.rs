@@ -33,6 +33,7 @@ extern crate regex;
 extern crate url;
 extern crate multipart;
 extern crate unescape;
+extern crate serde_json;
 #[macro_use] extern crate hado;
 
 use std::fmt::Display;
@@ -44,11 +45,8 @@ use std::collections::HashMap;
 
 use hyper::client::Client;
 use hyper::client::request::Request;
-use hyper::header::{CookieJar,SetCookie,Cookie,ContentType};
-use hyper::mime::{Mime, TopLevel, SubLevel};
+use hyper::header::{CookieJar,SetCookie,Cookie};
 use hyper::status::StatusCode;
-
-use url::form_urlencoded;
 
 use multipart::client::Multipart;
 
@@ -56,6 +54,8 @@ use std::io::Read;
 
 use select::document::Document;
 use select::predicate::{Class, Name, And, Attr};
+
+use serde_json::Value;
 
 macro_rules! map(
     { $($key:expr => $value:expr),+ } => {
@@ -103,25 +103,71 @@ macro_rules! unescape(
     };
 );
 
+///Макрос, создающий TabunError::ParseError
+macro_rules! parse_error {
+    () => {
+        TabunError::ParseError(
+            String::from(file!()), line!(), String::from("Cannot parse response from server")
+        )
+    };
+    ( $msg: expr ) => {
+        TabunError::ParseError(
+            String::from(file!()), line!(), String::from($msg)
+        )
+    };
+}
+
 ///Макрос для возвращения ошибок парсинга
 macro_rules! try_to_parse {
     ( $expr: expr ) => {
         match $expr {
             Some(x) => x,
-            None => return Err(TabunError::ParseError(
-                String::from(file!()), line!(), String::from("Cannot parse page")
-            )),
+            None => return Err(parse_error!()),
         }
     };
     ( $expr: expr, $msg: expr ) => {
         match $expr {
             Some(x) => x,
-            None => return Err(TabunError::ParseError(
-                String::from(file!()), line!(), String::from($msg)
-            )),
+            None => return Err(parse_error!($msg)),
         }
     };
 }
+
+///Макрос для парсинга json-объекта
+macro_rules! try_to_parse_json {
+    ( $expr: expr ) => {
+        {
+            let tmp: Value = try_to_parse!(
+                serde_json::from_str($expr).ok(),
+                "Cannot parse JSON object"
+            );
+            if tmp.is_object() {
+                tmp
+            } else {
+                return Err(parse_error!("Expected JSON object"))
+            }
+        }
+    }
+}
+
+///Макрос для получения из json-объекта значения определенного типа
+///или значения по умолчанию
+macro_rules! get_json {
+    ($expr: expr, $key: expr, $as_who: ident, $def: expr) => {
+        match $expr.pointer($key) {
+            Some(x) => x.$as_who().unwrap_or($def),
+            None => $def,
+        }
+    };
+
+    ( $expr: expr, $key: expr, $as_who: ident ) => {
+        match $expr.pointer($key) {
+            Some(x) => x.$as_who(),
+            None => None,
+        }
+    }
+}
+
 
 mod comments;
 mod posts;
@@ -373,31 +419,6 @@ impl<'a> TClient<'a> {
         Ok(Document::from(&*buf))
     }
 
-    fn post_urlencoded(&mut self, url: &str, bd: HashMap<&str, &str>) -> Result<hyper::client::Response, TabunError> {
-        let url = format!("{}{}", HOST_URL, url); //TODO: Заменить на concat_idents! когда он стабилизируется
-
-        let body = form_urlencoded::Serializer::new(String::new())
-            .extend_pairs(bd)
-            .finish();
-
-        let req = self.client.post(&url)
-            .header(Cookie::from_cookie_jar(&self.cookies))
-            .header(ContentType(Mime(TopLevel::Application, SubLevel::WwwFormUrlEncoded, vec![])))
-            .body(body.as_str());
-
-        let res = try!(req.send());
-
-        if let Some(x) = res.headers.get::<SetCookie>() {
-            x.apply_to_cookie_jar(&mut self.cookies);
-        }
-
-        if res.status != hyper::Ok && res.status != hyper::status::StatusCode::MovedPermanently {
-            return Err(TabunError::from(res.status));
-        }
-
-        Ok(res)
-    }
-
     fn multipart(&mut self,url: &str, bd: HashMap<&str,&str>) -> Result<hyper::client::Response, TabunError> {
         let url = format!("{}{}", HOST_URL, url); //TODO: Заменить на concat_idents! когда он стабилизируется
         let mut request = Request::new(
@@ -425,61 +446,93 @@ impl<'a> TClient<'a> {
         Ok(res)
     }
 
-    ///Логинится с указанными именем пользователя и паролем
-    pub fn login(&mut self, login: &str, pass: &str) -> TabunResult<()> {
-        let err_regex = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"").unwrap();
-
+    /// Отправляет ajax-запрос и возвращает распарсенный json-ответ (Value).
+    /// Он гарантированно является json-объектом (то есть можно использовать
+    /// `.as_object().unwrap()`, если нужно)
+    fn ajax(&mut self, url: &str, bd: HashMap<&str, &str>) -> TabunResult<Value> {
         let key = self.security_ls_key.to_owned();
 
-        let mut res = try!(self.post_urlencoded(
+        let mut bd_ready = map!["security_ls_key" => key.as_str()];
+        for (k, v) in &bd {
+            bd_ready.insert(k, v);
+        }
+
+        let mut res = try!(self.multipart(url, bd_ready));
+
+        let mut data = String::new();
+        try!(res.read_to_string(&mut data));
+        let raw_data = data.trim();
+
+        // Если накосячили с security_ls_key, то может прийти такая ошибка
+        if raw_data.starts_with("Hacking") {
+            return Err(TabunError::HackingAttempt);
+        }
+
+        let mut data = String::new();
+
+        if raw_data.starts_with("<textarea>{") {
+            // Иногда Табун зачем-то возвращает json-объект, обёрнутый в textarea
+            let doc = Document::from(raw_data);
+            let tmp = try_to_parse!(
+                doc.find(Name("textarea")).first()
+            ).text();
+            data.push_str(tmp.as_str());
+
+        } else {
+            data.push_str(raw_data);
+        }
+
+        let data = try_to_parse_json!(data.as_str());
+
+        if get_json!(data, "/bStateError", as_bool, false) {
+            return Err(TabunError::Error(
+                get_json!(data, "/sMsgTitle", as_str, "").to_string(),
+                get_json!(data, "/sMsg", as_str, "").to_string(),
+            ));
+        }
+
+        Ok(data)
+    }
+
+    ///Логинится с указанными именем пользователя и паролем
+    pub fn login(&mut self, login: &str, pass: &str) -> TabunResult<()> {
+        try!(self.ajax(
             "/login/ajax-login",
             map![
                 "login" => login,
                 "password" => pass,
                 "return-path" => HOST_URL,
-                "remember" => "on",
-                "security_ls_key" => &key
+                "remember" => "on"
             ]
         ));
 
-        let mut bd = String::new();
-        try!(res.read_to_string(&mut bd));
-        let bd = bd.as_str();
+        let page = try!(self.get(&"/".to_owned()));
+        self.name = try_to_parse!(
+            page.find(Class("username")).first()
+        ).text();
 
-        if bd.contains("Hacking") {
-            Err(TabunError::HackingAttempt)
-        } else if err_regex.is_match(bd) {
-            let err = err_regex.captures(bd).unwrap();
-            Err(TabunError::Error(
-                    unescape!(err.at(1).unwrap()),
-                    unescape!(err.at(2).unwrap())))
-        } else {
-            let page = try!(self.get(&"/".to_owned()));
-            self.name = try_to_parse!(
-                page.find(Class("username")).first()
-            ).text();
-
-            Ok(())
-        }
+        Ok(())
     }
 
     ///Загружает картинку по URL, попутно вычищая табуновские бэкслэши из ответа
     pub fn upload_image_from_url(&mut self, url: &str) -> TabunResult<String> {
-        let key = self.security_ls_key.to_owned();
-        let url_regex = Regex::new(r"img src=\\&quot;(.+)\\&quot;").unwrap();
-        let mut res_s = String::new();
-        let mut res = try!(self.multipart("/ajax/upload/image", map!["title" => "", "img_url" => url, "security_ls_key" => &key]));
-        try!(res.read_to_string(&mut res_s));
-        if let Some(x) = url_regex.captures(&res_s) {
-            Ok(x.at(1).unwrap().to_owned())
-        } else {
-            let err_regex = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"").unwrap();
-            let s = res_s.to_owned();
-            let err = try_to_parse!(err_regex.captures(&s));
-            Err(TabunError::Error(
-                    unescape!(err.at(1).unwrap()),
-                    unescape!(err.at(2).unwrap())))
-        }
+        let data = try!(self.ajax(
+            "/ajax/upload/image",
+            map![
+                "title" => "",
+                "img_url" => url
+            ]
+        ));
+
+        let text = get_json!(data, "/sText", as_str);
+        let text = match text {
+            Some(x) => x,
+            None => return Err(parse_error!("Server did not return sText"))
+        };
+
+        let doc = Document::from(text);
+        let img = try_to_parse!(doc.find(Name("img")).first());
+        Ok(try_to_parse!(img.attr("src")).to_string())
     }
 
     ///Получает ID блога по его имени
@@ -629,28 +682,20 @@ impl<'a> TClient<'a> {
     ///(внутренний метод для публичных favourite_post и favourite_comment)
     fn favourite(&mut self, id: u32, typ: bool, fn_typ: bool) -> TabunResult<u32> {
         let id = id.to_string();
-        let key = self.security_ls_key.to_owned();
 
         let body = map![
-        if fn_typ { "idComment"} else { "idTopic" } => id.as_str(),
-        "type"                                      => &(if typ { "1" } else { "0" }),
-        "security_ls_key"                           => &key
+            if fn_typ { "idComment"} else { "idTopic" } => id.as_str(),
+            "type" => &(if typ { "1" } else { "0" })
         ];
 
-        let mut res = try!(self.multipart(&format!("/ajax/favourite/{}/", if fn_typ { "comment" } else { "topic" }),body));
+        let data = try!(self.ajax(
+            &format!("/ajax/favourite/{}/", if fn_typ { "comment" } else { "topic" }),
+            body
+        ));
 
-        if res.status != hyper::Ok { return Err(TabunError::NumError(res.status)) }
-
-        let mut bd = String::new();
-        try!(res.read_to_string(&mut bd));
-
-        if bd.contains("\"bStateError\":true") {
-            let err = Regex::new("\"sMsgTitle\":\"(.+)\",\"sMsg\":\"(.+?)\"").unwrap().captures(&bd).unwrap();
-            Err(TabunError::Error(
-                    unescape!(err.at(1).unwrap()),
-                    unescape!(err.at(2).unwrap())))
-        } else {
-            parse_text_to_res!(regex => "\"iCount\":(\\d+)", st => &bd, num => 1, typ => u32)
+        match get_json!(data, "/iCount", as_u64) {
+            Some(fav_cnt) => Ok(fav_cnt as u32),
+            None => Err(parse_error!("Server did not return iCount"))
         }
     }
 }
