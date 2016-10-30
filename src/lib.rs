@@ -82,7 +82,7 @@ use select::predicate::{Class, Name, And, Attr};
 
 use serde_json::Value;
 
-#[macro_use] mod utils;
+#[macro_use] pub mod utils;
 mod comments;
 mod posts;
 mod talks;
@@ -441,7 +441,21 @@ impl<'a> TClient<'a> {
             .header(Cookie::from_cookie_jar(&self.cookies))
     }
 
-    fn get_document(&mut self,url: &str) -> TabunResult<Document> {
+    /// Загружает данные по ссылке, декодирует как UTF-8 и возвращает строку.
+    /// Заменяет некорректные UTF-8 последовательности на символ «�».
+    pub fn get_string(&mut self, url: &str) -> TabunResult<String> {
+        Ok(String::from_utf8_lossy(
+            &try!(self.get(url))
+        ).into_owned())
+    }
+
+    /// Загружает данные по ссылке, декодирует как UTF-8, парсит HTML и
+    /// возвращает `select::document::Document`. Может быть полезно, если из
+    /// одной и той же страницы вам нужно вытащить несколько разных данных:
+    /// результат этого метода можно скормить в методы с префиксом `doc_` и
+    /// таким образом собрать все нужные данные, уложившись в один HTTP-запрос.
+    /// Заменяет некорректные UTF-8 последовательности на символ «�».
+    pub fn get_document(&mut self, url: &str) -> TabunResult<Document> {
         let buf = String::from_utf8_lossy(
             &try!(self.get(url))
         ).into_owned();
@@ -449,7 +463,8 @@ impl<'a> TClient<'a> {
         Ok(Document::from(&*buf))
     }
 
-    fn get(&mut self, url: &str) -> TabunResult<Vec<u8>> {
+    /// Загружает данные по ссылке и возвращает их как есть.
+    pub fn get(&mut self, url: &str) -> TabunResult<Vec<u8>> {
         let mut res = try!(self.create_middle_req(url).send());
 
         if res.status != hyper::Ok {
@@ -584,15 +599,31 @@ impl<'a> TClient<'a> {
     ///# Examples
     ///```no_run
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
-    ///let blog_id = user.get_blog_id("lighthouse").unwrap();
-    ///assert_eq!(blog_id,15558);
+    ///let blog_id = user.get_blog_id("librehouse").unwrap();
+    ///assert_eq!(blog_id, 55698);
     ///```
     pub fn get_blog_id(&mut self,name: &str) -> TabunResult<u32> {
         let url = format!("/blog/{}", name);
-        let page = try!(self.get_document(&url));
+        let data = try!(self.get_string(&url));
 
+        let datapart = utils::find_substring(
+            &data,
+            "<div class=\"blog-top", true,
+            "<div class=\"blog-mini", false,
+            false
+        );
+        let pagepart = match datapart {
+            Some(x) => Document::from(&*x),
+            None => return Err(parse_error!("Cannot extract '<div class=\"blog-top\">'"))
+        };
+
+        self.doc_get_blog_id(&pagepart)
+    }
+
+    pub fn doc_get_blog_id(&self, page: &Document) -> TabunResult<u32> {
         Ok(try_to_parse!(hado!{
-            el <- page.find(And(Name("div"),Class("vote-item"))).find(Name("span")).first();
+            blog_top <- page.find(And(Name("div"), Class("blog-top"))).first();
+            el <- blog_top.find(And(Name("div"), Class("vote-item"))).find(Name("span")).first();
             id_s <- el.attr("id");
             num_s <- id_s.split('_').last();
             num_s.parse::<u32>().ok()
