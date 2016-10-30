@@ -26,6 +26,31 @@
 //! разнесён по нескольким файлам.
 //!
 //! Большинство функций ~~нагло украдены~~ портированы с [`tabun_api`](https://github.com/andreymal/tabun_api)
+//!
+//! # Examples
+//!
+//! ```no_run
+//! let mut user = libtabun::TClient::new("username", "password").unwrap();
+//! let posts = user.get_posts("fanart", 1).unwrap();
+//! for post in &posts {
+//!     println!("{} - {}", post.id, post.title);
+//! }
+//! ```
+//!
+//! Можно использовать [`TClientBuilder`](struct.TClientBuilder.html) для
+//! большей кастомизации:
+//!
+//! ```no_run
+//! let mut user = libtabun::TClientBuilder::new()
+//!     .session_id("t15sacuhntote9h99190vtne1m")
+//!     .key("329tZL5OoJRvw6SxcmLpfMFXCt7mfjcU")
+//!     .host("http://tabun-dev.localhost")
+//!     .finalize().unwrap();
+//! println!(
+//!     "Logged in as {}",
+//!     if user.name.is_empty() { "[none]" } else { user.name.as_str() }
+//! );
+//! ```
 
 extern crate hyper;
 extern crate select;
@@ -45,7 +70,7 @@ use std::collections::HashMap;
 
 use hyper::client::Client;
 use hyper::client::request::Request;
-use hyper::header::{CookieJar,SetCookie,Cookie};
+use hyper::header::{CookiePair,CookieJar,SetCookie,Cookie};
 use hyper::status::StatusCode;
 
 use multipart::client::Multipart;
@@ -102,8 +127,21 @@ pub enum CommentType {
 pub struct TClient<'a> {
     pub name:               String,
     pub security_ls_key:    String,
+    pub host:               String,
     client:                 Client,
     cookies:                CookieJar<'a>,
+}
+
+///Строитель клиента табуна
+pub struct TClientBuilder {
+    login:            String,
+    pass:             String,
+    session_id:       String,
+    security_ls_key:  String,
+    key:              String,
+    client:           Client,
+    host:             String,
+    session_id_name:  String
 }
 
 #[derive(Debug,Clone)]
@@ -250,6 +288,91 @@ pub const HOST_URL: &'static str = "https://tabun.everypony.ru";
 
 pub type TabunResult<T> = Result<T,TabunError>;
 
+impl TClientBuilder {
+    pub fn new() -> TClientBuilder {
+        TClientBuilder {
+            login:            String::new(),
+            pass:             String::new(),
+            session_id:       String::new(),
+            security_ls_key:  String::new(),
+            key:              String::new(),
+            client:           Client::new(),
+            host:             HOST_URL.to_string(),
+            session_id_name:  String::from("TABUNSESSIONID"),
+        }
+    }
+
+    pub fn login(mut self, login: &str) -> TClientBuilder {
+        self.login = login.to_string();
+        self
+    }
+
+    pub fn pass(mut self, pass: &str) -> TClientBuilder {
+        self.pass = pass.to_string();
+        self
+    }
+
+    pub fn session_id(mut self, session_id: &str) -> TClientBuilder {
+        self.session_id = session_id.to_string();
+        self
+    }
+
+    pub fn security_ls_key(mut self, security_ls_key: &str) -> TClientBuilder {
+        self.security_ls_key = security_ls_key.to_string();
+        self
+    }
+
+    pub fn key(mut self, key: &str) -> TClientBuilder {
+        self.key = key.to_string();
+        self
+    }
+
+    pub fn host(mut self, host: &str) -> TClientBuilder {
+        self.host = host.to_string();
+        self
+    }
+
+    pub fn session_id_name(mut self, session_id_name: &str) -> TClientBuilder {
+        self.session_id_name = session_id_name.to_string();
+        self
+    }
+
+    pub fn client(mut self, client: Client) -> TClientBuilder {
+        self.client = client;
+        self
+    }
+
+    pub fn finalize<'a>(self) -> TabunResult<TClient<'a>> {
+        let mut user = TClient{
+            name:               String::new(),
+            security_ls_key:    self.security_ls_key.clone(),
+            client:             self.client,
+            cookies:            CookieJar::new(format!("{:?}",std::time::SystemTime::now()).as_bytes()),
+            host:               self.host,
+        };
+
+        // Проставляем печеньки какие есть
+        if !self.session_id.is_empty() {
+            user.cookies.add(CookiePair::new(self.session_id_name, self.session_id));
+        }
+
+        if !self.key.is_empty() {
+            user.cookies.add(CookiePair::new("key".to_string(), self.key));
+        }
+
+        // Качаем главную страницу, попутно это проставит отсутствующие печеньки
+        let data = try!(user.get_bytes("/"));
+        // Парсим информацию о текущем пользователе
+        user.update_userinfo(&data);
+
+        // Если текущего пользователя нет, но у нас есть логин и пароль, то логинимся
+        if user.name.is_empty() && !self.login.is_empty() && !self.pass.is_empty() {
+            try!(user.login(&self.login, &self.pass));
+        }
+        Ok(user)
+    }
+}
+
 impl<'a> TClient<'a> {
 
     ///Входит на табунчик и сохраняет LIVESTREET_SECURITY_KEY,
@@ -265,16 +388,11 @@ impl<'a> TClient<'a> {
             security_ls_key:    String::new(),
             client:             Client::new(),
             cookies:            CookieJar::new(format!("{:?}",std::time::SystemTime::now()).as_bytes()),
+            host:               String::from(HOST_URL),
         };
 
-        let ls_key_regex = Regex::new(r"LIVESTREET_SECURITY_KEY = '(.+)'").unwrap();
-
-        let page = try!(user.get(&"/login".to_owned()));
-        let page = try_to_parse!(
-            page.find(Name("html")).first()
-        ).html();
-
-        user.security_ls_key = ls_key_regex.captures(&page).unwrap().at(1).unwrap().to_owned();
+        let data = try!(user.get_bytes("/"));
+        user.update_userinfo(&data);
 
         if let (Some(login), Some(pass)) = (login.into(), pass.into()) {
             try!(user.login(login, pass));
@@ -283,33 +401,73 @@ impl<'a> TClient<'a> {
         Ok(user)
     }
 
+    /// Парсит код страницы, переданной в параметре, и обновляет:
+    /// - security_ls_key
+    /// - имя пользователя
+    fn update_userinfo(&mut self, data: &Vec<u8>) {
+        let str_data = String::from_utf8_lossy(data).into_owned();
+        let page = Document::from(str_data.as_str());
+
+        // Ищем security_ls_key
+        let ls_key_regex = Regex::new(r"LIVESTREET_SECURITY_KEY = '(.+)'").unwrap();
+        match ls_key_regex.captures(&str_data) {
+            Some(x) => {
+                self.security_ls_key = x.at(1).unwrap().to_owned();
+            },
+            None => {}
+        };
+
+        // Ищем панельку с информацией о текущем пользователе
+        let dropdown_user = match page.find(Attr("id", "dropdown-user")).first() {
+            None => {
+                // Не нашли — значит скорее всего не залогинены
+                self.name = String::new();
+                return;
+            },
+            Some(x) => x,
+        };
+
+        self.name = match dropdown_user.find(Class("username")).first() {
+            Some(x) => x.text(),
+            None => String::new(),
+        };
+    }
+
     ///Заметка себе: создаёт промежуточный объект запроса, сразу выставляя печеньки,
     ///на случай если надо что-то поменять (как в delete_post)
     fn create_middle_req(&mut self, url: &str) -> hyper::client::RequestBuilder {
-        let full_url = format!("{}{}", HOST_URL, url); //TODO: Заменить на concat_idents! когда он стабилизируется
+        let full_url = format!("{}{}", self.host, url); //TODO: Заменить на concat_idents! когда он стабилизируется
         self.client.get(&full_url)
             .header(Cookie::from_cookie_jar(&self.cookies))
     }
 
-    fn get(&mut self,url: &str) -> Result<Document, TabunError> {
+    fn get(&mut self,url: &str) -> TabunResult<Document> {
+        let buf = String::from_utf8_lossy(
+            &try!(self.get_bytes(url))
+        ).into_owned();
+
+        Ok(Document::from(&*buf))
+    }
+
+    fn get_bytes(&mut self, url: &str) -> TabunResult<Vec<u8>> {
         let mut res = try!(self.create_middle_req(url).send());
 
         if res.status != hyper::Ok {
             return Err(TabunError::from(res.status));
         }
 
-        let mut buf = String::new();
-        try!(res.read_to_string(&mut buf));
+        let mut buf: Vec<u8> = Vec::new();
+        try!(res.read_to_end(&mut buf));
 
         if let Some(x) = res.headers.get::<SetCookie>() {
             x.apply_to_cookie_jar(&mut self.cookies);
         }
 
-        Ok(Document::from(&*buf))
+        Ok(buf)
     }
 
     fn multipart(&mut self,url: &str, bd: HashMap<&str,&str>) -> Result<hyper::client::Response, TabunError> {
-        let url = format!("{}{}", HOST_URL, url); //TODO: Заменить на concat_idents! когда он стабилизируется
+        let url = format!("{}{}", self.host, url); //TODO: Заменить на concat_idents! когда он стабилизируется
         let mut request = Request::new(
             hyper::method::Method::Post,
             hyper::Url::from_str(&url).unwrap()
@@ -385,21 +543,18 @@ impl<'a> TClient<'a> {
 
     ///Логинится с указанными именем пользователя и паролем
     pub fn login(&mut self, login: &str, pass: &str) -> TabunResult<()> {
+        let host = self.host.to_owned();
         try!(self.ajax(
             "/login/ajax-login",
             map![
                 "login" => login,
                 "password" => pass,
-                "return-path" => HOST_URL,
+                "return-path" => &host,
                 "remember" => "on"
             ]
         ));
 
-        let page = try!(self.get(&"/".to_owned()));
-        self.name = try_to_parse!(
-            page.find(Class("username")).first()
-        ).text();
-
+        self.name = String::from(login);
         Ok(())
     }
 
