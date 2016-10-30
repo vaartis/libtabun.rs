@@ -57,7 +57,7 @@ impl<'a> TClient<'a> {
     ///user.get_talk(123);
     pub fn get_talk(&mut self, talk_id: u32) -> TabunResult<Talk>{
         let url = format!("/talk/read/{}", talk_id);
-        let page = try!(self.get(&url));
+        let page = try!(self.get_document(&url));
 
         let title = try_to_parse!(page.find(Class("topic-title")).first()).text();
 
@@ -106,7 +106,7 @@ impl<'a> TClient<'a> {
             "talk_text" => &body
         ];
 
-        let res = try!(self.multipart("/talk/add",fields));
+        let res = try!(self.post_multipart("/talk/add",fields));
 
         if let Some(x) = res.headers.get_raw("location") {
             parse_text_to_res!(regex => r"read/(\d+)/$", st => str::from_utf8(&x[0]).unwrap(), num => 1, typ => u32)
@@ -123,7 +123,7 @@ impl<'a> TClient<'a> {
     ///user.get_talks(1);
     ///```
     pub fn get_talks(&mut self, page: u32) -> TabunResult<Vec<TalkItem>> {
-        let res = try!(self.get(&format!("/talk/inbox/page{}", page)));
+        let res = try!(self.get_document(&format!("/talk/inbox/page{}", page)));
         let mut ret = Vec::new();
 
         let res = res.find(Name("tbody"));

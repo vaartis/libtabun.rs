@@ -361,7 +361,7 @@ impl TClientBuilder {
         }
 
         // Качаем главную страницу, попутно это проставит отсутствующие печеньки
-        let data = try!(user.get_bytes("/"));
+        let data = try!(user.get("/"));
         // Парсим информацию о текущем пользователе
         user.update_userinfo(&data);
 
@@ -391,7 +391,7 @@ impl<'a> TClient<'a> {
             host:               String::from(HOST_URL),
         };
 
-        let data = try!(user.get_bytes("/"));
+        let data = try!(user.get("/"));
         user.update_userinfo(&data);
 
         if let (Some(login), Some(pass)) = (login.into(), pass.into()) {
@@ -441,15 +441,15 @@ impl<'a> TClient<'a> {
             .header(Cookie::from_cookie_jar(&self.cookies))
     }
 
-    fn get(&mut self,url: &str) -> TabunResult<Document> {
+    fn get_document(&mut self,url: &str) -> TabunResult<Document> {
         let buf = String::from_utf8_lossy(
-            &try!(self.get_bytes(url))
+            &try!(self.get(url))
         ).into_owned();
 
         Ok(Document::from(&*buf))
     }
 
-    fn get_bytes(&mut self, url: &str) -> TabunResult<Vec<u8>> {
+    fn get(&mut self, url: &str) -> TabunResult<Vec<u8>> {
         let mut res = try!(self.create_middle_req(url).send());
 
         if res.status != hyper::Ok {
@@ -466,7 +466,7 @@ impl<'a> TClient<'a> {
         Ok(buf)
     }
 
-    fn multipart(&mut self,url: &str, bd: HashMap<&str,&str>) -> Result<hyper::client::Response, TabunError> {
+    fn post_multipart(&mut self,url: &str, bd: HashMap<&str,&str>) -> Result<hyper::client::Response, TabunError> {
         let url = format!("{}{}", self.host, url); //TODO: Заменить на concat_idents! когда он стабилизируется
         let mut request = Request::new(
             hyper::method::Method::Post,
@@ -504,7 +504,7 @@ impl<'a> TClient<'a> {
             bd_ready.insert(k, v);
         }
 
-        let mut res = try!(self.multipart(url, bd_ready));
+        let mut res = try!(self.post_multipart(url, bd_ready));
 
         let mut data = String::new();
         try!(res.read_to_string(&mut data));
@@ -589,7 +589,7 @@ impl<'a> TClient<'a> {
     ///```
     pub fn get_blog_id(&mut self,name: &str) -> TabunResult<u32> {
         let url = format!("/blog/{}", name);
-        let page = try!(self.get(&url));
+        let page = try!(self.get_document(&url));
 
         Ok(try_to_parse!(hado!{
             el <- page.find(And(Name("div"),Class("vote-item"))).find(Name("span")).first();
@@ -614,7 +614,7 @@ impl<'a> TClient<'a> {
         };
 
         let full_url = format!("/profile/{}", name);
-        let page = try!(self.get(&full_url));
+        let page = try!(self.get_document(&full_url));
         let profile = page.find(And(Name("div"),Class("profile")));
 
         let username = try_to_parse!(

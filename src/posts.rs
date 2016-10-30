@@ -54,7 +54,7 @@ impl<'a> TClient<'a> {
             "security_ls_key"       =>  &key
         ];
 
-        let res = try!(self.multipart("/topic/add",bd));
+        let res = try!(self.post_multipart("/topic/add",bd));
 
         let r = str::from_utf8(&res.headers.get_raw("location").unwrap()[0]).unwrap();
         parse_text_to_res!(regex => r"(\d+).html$", st => r, num => 1, typ => u32 )
@@ -68,7 +68,7 @@ impl<'a> TClient<'a> {
     ///user.get_posts("lighthouse",1);
     ///```
     pub fn get_posts(&mut self, blog_name: &str, page: u32) -> TabunResult<Vec<Post>> {
-        let res = try!(self.get(&format!("/blog/{}/page{}", blog_name, page)));
+        let res = try!(self.get_document(&format!("/blog/{}/page{}", blog_name, page)));
         let mut ret = Vec::new();
 
         for p in res.find(Name("article")).iter() {
@@ -121,7 +121,7 @@ impl<'a> TClient<'a> {
     ///user.get_editable_post(1111);
     ///```
     pub fn get_editable_post(&mut self, post_id: u32) -> TabunResult<EditablePost> {
-        let res = try!(self.get(&format!("/topic/edit/{}",post_id)));
+        let res = try!(self.get_document(&format!("/topic/edit/{}",post_id)));
 
         let title = try_to_parse!(res.find(Attr("id","topic_title")).first());
         let title = try_to_parse!(title.attr("value")).to_string();
@@ -151,8 +151,8 @@ impl<'a> TClient<'a> {
     ///```
     pub fn get_post<'f, T: Into<Option<&'f str>>>(&mut self,blog_name: T,post_id: u32) -> TabunResult<Post>{
         let res = match blog_name.into() {
-            None    => try!(self.get(&format!("/blog/{}.html",post_id))),
-            Some(x) => try!(self.get(&format!("/blog/{}/{}.html",x,post_id)))
+            None    => try!(self.get_document(&format!("/blog/{}.html",post_id))),
+            Some(x) => try!(self.get_document(&format!("/blog/{}/{}.html",x,post_id)))
         };
 
         let post_title = try_to_parse!(res.find(And(Name("h1"),Class("topic-title"))).first()).text();
@@ -215,7 +215,7 @@ impl<'a> TClient<'a> {
             "topic_forbid_comment"  =>  &forbid_comment
         ];
 
-        let res = try!(self.multipart(&format!("/topic/edit/{}",post_id), bd));
+        let res = try!(self.post_multipart(&format!("/topic/edit/{}",post_id), bd));
 
         let r = str::from_utf8(&res.headers.get_raw("location").unwrap()[0]).unwrap();
 

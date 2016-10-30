@@ -52,7 +52,7 @@ impl<'a> TClient<'a> {
             }
         });
 
-        let page = try!(self.get(url));
+        let page = try!(self.get_document(url));
 
         let comments = page.find(And(Name("div"),Class("comments")));
 
