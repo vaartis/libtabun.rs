@@ -23,6 +23,7 @@ extern crate hyper;
 
 use super::*;
 
+use select::document::Document;
 use select::predicate::{Name,Class,Attr,And};
 use hyper::header::Referer;
 
@@ -68,10 +69,22 @@ impl<'a> TClient<'a> {
     ///user.get_posts("lighthouse",1);
     ///```
     pub fn get_posts(&mut self, blog_name: &str, page: u32) -> TabunResult<Vec<Post>> {
-        let res = try!(self.get_document(&format!("/blog/{}/page{}", blog_name, page)));
+        let doc = try!(self.get_document(&format!("/blog/{}/page{}/", blog_name, page)));
+        self.doc_get_posts(&doc)
+    }
+
+    ///Получает посты со страницы
+    ///
+    ///# Examples
+    ///```no_run
+    ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    ///let page = user.get_document("/profile/Orhideous/created/posts/").unwrap();
+    ///user.doc_get_posts(&page);
+    ///```
+    pub fn doc_get_posts(&mut self, doc: &Document) -> TabunResult<Vec<Post>> {
         let mut ret = Vec::new();
 
-        for p in res.find(Name("article")).iter() {
+        for p in doc.find(Name("article")).iter() {
             let post_id = try_to_parse!(hado!{
                 el <- p.find(And(Name("div"),Class("vote-topic"))).first();
                 attr <- el.attr("id");
@@ -121,14 +134,17 @@ impl<'a> TClient<'a> {
     ///user.get_editable_post(1111);
     ///```
     pub fn get_editable_post(&mut self, post_id: u32) -> TabunResult<EditablePost> {
-        let res = try!(self.get_document(&format!("/topic/edit/{}",post_id)));
+        let doc = try!(self.get_document(&format!("/topic/edit/{}",post_id)));
+        self.doc_get_editable_post(&doc)
+    }
 
-        let title = try_to_parse!(res.find(Attr("id","topic_title")).first());
+    pub fn doc_get_editable_post(&mut self, doc: &Document) -> TabunResult<EditablePost> {
+        let title = try_to_parse!(doc.find(Attr("id","topic_title")).first());
         let title = try_to_parse!(title.attr("value")).to_string();
 
-        let body = try_to_parse!(res.find(Attr("id","topic_text")).first()).text();
+        let body = try_to_parse!(doc.find(Attr("id","topic_text")).first()).text();
 
-        let tags = try_to_parse!(res.find(Attr("id","topic_tags")).first());
+        let tags = try_to_parse!(doc.find(Attr("id","topic_tags")).first());
         let tags = try_to_parse!(tags.attr("value"))
             .split(',').map(|x| x.to_string()).collect::<Vec<String>>();
 
@@ -140,7 +156,7 @@ impl<'a> TClient<'a> {
     }
 
     ///Получает пост, блог можно опустить (передать `None`), но лучше так не делать,
-    ///дабы избежать доволнительных перенаправлений.
+    ///дабы избежать дополнительных перенаправлений.
     ///
     ///# Examples
     ///```no_run
@@ -150,32 +166,42 @@ impl<'a> TClient<'a> {
     ///user.get_post("",157198);
     ///```
     pub fn get_post<'f, T: Into<Option<&'f str>>>(&mut self,blog_name: T,post_id: u32) -> TabunResult<Post>{
-        let res = match blog_name.into() {
+        let doc = match blog_name.into() {
             None    => try!(self.get_document(&format!("/blog/{}.html",post_id))),
             Some(x) => try!(self.get_document(&format!("/blog/{}/{}.html",x,post_id)))
         };
+        self.doc_get_post(&doc)
+    }
 
-        let post_title = try_to_parse!(res.find(And(Name("h1"),Class("topic-title"))).first()).text();
+    pub fn doc_get_post(&mut self, doc: &Document) -> TabunResult<Post>{
+        let post_id = try_to_parse!(hado!{
+            el <- doc.find(And(Name("div"),Class("vote-topic"))).first();
+            attr <- el.attr("id");
+            id_s <- attr.split('_').collect::<Vec<_>>().get(3);
+            id_s.parse::<u32>().ok()
+        });
 
-        let post_body = try_to_parse!(res.find(And(Name("div"),Class("topic-content"))).first()).inner_html();
+        let post_title = try_to_parse!(doc.find(And(Name("h1"),Class("topic-title"))).first()).text();
+
+        let post_body = try_to_parse!(doc.find(And(Name("div"),Class("topic-content"))).first()).inner_html();
         let post_body = post_body.trim();
 
-        let post_date = try_to_parse!(res.find(And(Name("li"),Class("topic-info-date")))
+        let post_date = try_to_parse!(doc.find(And(Name("li"),Class("topic-info-date")))
                                       .find(Name("time"))
                                       .first());
         let post_date = try_to_parse!(post_date.attr("datetime"));
 
-        let post_tags = res.find(And(Name("a"),Attr("rel","tag"))).iter().fold(Vec::new(),|mut acc,t| {
+        let post_tags = doc.find(And(Name("a"),Attr("rel","tag"))).iter().fold(Vec::new(),|mut acc,t| {
             acc.push(t.text());
             acc
         });
 
         let cm_count = try_to_parse!(hado!{
-            el <- res.find(And(Name("span"),Attr("id","count-comments"))).first();
+            el <- doc.find(And(Name("span"),Attr("id","count-comments"))).first();
             el.text().parse::<u32>().ok()
         });
 
-        let post_author = try_to_parse!(res.find(And(Name("div"),Class("topic-info")))
+        let post_author = try_to_parse!(doc.find(And(Name("div"),Class("topic-info")))
                                         .find(And(Name("a"),Attr("rel","author")))
                                         .first()).text();
 

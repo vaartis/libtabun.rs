@@ -22,6 +22,7 @@ extern crate hyper;
 
 use super::*;
 
+use select::document::Document;
 use select::predicate::{Class, Name, And};
 
 use std::{str,convert};
@@ -56,22 +57,28 @@ impl<'a> TClient<'a> {
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.get_talk(123);
     pub fn get_talk(&mut self, talk_id: u32) -> TabunResult<Talk>{
-        let url = format!("/talk/read/{}", talk_id);
-        let page = try!(self.get_document(&url));
+        let url = format!("/talk/read/{}/", talk_id);
+        let doc = try!(self.get_document(&url));
+        self.doc_get_talk(&doc, talk_id)
+    }
 
-        let title = try_to_parse!(page.find(Class("topic-title")).first()).text();
+    pub fn doc_get_talk<T: Into<Option<u32>>>(&mut self, doc: &Document, talk_id: T) -> TabunResult<Talk>{
+        let title = try_to_parse!(doc.find(Class("topic-title")).first()).text();
 
-        let body = try_to_parse!(page.find(Class("topic-content")).first()).inner_html();
+        let body = try_to_parse!(doc.find(Class("topic-content")).first()).inner_html();
         let body = body.trim().to_string();
 
-        let date = try_to_parse!(page.find(And(Name("li"),Class("topic-info-date")))
+        let date = try_to_parse!(doc.find(And(Name("li"),Class("topic-info-date")))
                                  .find(Name("time"))
                                  .first());
         let date = try_to_parse!(date.attr("datetime")).to_string();
 
-        let comments = try!(self.get_comments(url.as_str()));
+        let comments = try!(match talk_id.into() {
+            Some(t) => self.doc_get_comments(&doc, format!("/talk/read/{}/", t).as_str()),
+            None => self.doc_get_comments(&doc, None)
+        });
 
-        let users = page.find(Class("talk-recipients-header"))
+        let users = doc.find(Class("talk-recipients-header"))
             .find(Name("a"))
             .iter()
             .filter(|x| x.attr("class").unwrap().contains("username"))
@@ -123,10 +130,14 @@ impl<'a> TClient<'a> {
     ///user.get_talks(1);
     ///```
     pub fn get_talks(&mut self, page: u32) -> TabunResult<Vec<TalkItem>> {
-        let res = try!(self.get_document(&format!("/talk/inbox/page{}", page)));
+        let doc = try!(self.get_document(&format!("/talk/inbox/page{}/", page)));
+        self.doc_get_talks(&doc)
+    }
+
+    pub fn doc_get_talks(&mut self, doc: &Document) -> TabunResult<Vec<TalkItem>> {
         let mut ret = Vec::new();
 
-        let res = res.find(Name("tbody"));
+        let res = doc.find(Name("tbody"));
 
         for p in res.find(Name("tr")).iter() {
             let talk_id = try_to_parse!(hado!{
@@ -143,12 +154,11 @@ impl<'a> TClient<'a> {
                 .map(|x| x.text().to_string())
                 .collect::<Vec<_>>();
 
-                ret.push(
-                    TalkItem {
-                        id: talk_id,
-                        title: talk_title,
-                        users: talk_users,
-                    });
+                ret.push(TalkItem {
+                    id: talk_id,
+                    title: talk_title,
+                    users: talk_users,
+                });
         }
         Ok(ret)
     }
@@ -158,7 +168,7 @@ impl<'a> TClient<'a> {
     pub fn delete_talk(&mut self, talk_id: u32) -> TabunResult<()> {
         let url = format!("/talk/delete/{}/?security_ls_key={}", talk_id ,&self.security_ls_key);
         match self.create_middle_req(&url)
-            .header(Referer(format!("{}/talk/{}/", HOST_URL, talk_id)))
+            .header(Referer(format!("{}/talk/read/{}/", HOST_URL, talk_id)))
             .send().unwrap().status {
                 hyper::Ok => Ok(()),
                 x => Err(TabunError::NumError(x))

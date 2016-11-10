@@ -153,7 +153,7 @@ pub struct Comment {
     pub votes:      i32,
     pub parent:     u32,
     pub post_id:    u32,
-    pub deleted:    bool
+    pub deleted:    bool,
 }
 
 #[derive(Debug,Clone)]
@@ -620,9 +620,9 @@ impl<'a> TClient<'a> {
         self.doc_get_blog_id(&pagepart)
     }
 
-    pub fn doc_get_blog_id(&self, page: &Document) -> TabunResult<u32> {
+    pub fn doc_get_blog_id(&self, doc: &Document) -> TabunResult<u32> {
         Ok(try_to_parse!(hado!{
-            blog_top <- page.find(And(Name("div"), Class("blog-top"))).first();
+            blog_top <- doc.find(And(Name("div"), Class("blog-top"))).first();
             el <- blog_top.find(And(Name("div"), Class("vote-item"))).find(Name("span")).first();
             id_s <- el.attr("id");
             num_s <- id_s.split('_').last();
@@ -638,15 +638,21 @@ impl<'a> TClient<'a> {
     ///```no_run
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.get_profile("Orhideous");
+    ///```
     pub fn get_profile<'f, T: Into<Option<&'f str>>>(&mut self, name: T) -> TabunResult<UserInfo> {
         let name = match name.into() {
             Some(x) => x.to_owned(),
             None    => self.name.to_owned()
         };
 
-        let full_url = format!("/profile/{}", name);
+        let full_url = format!("/profile/{}/", name);
         let page = try!(self.get_document(&full_url));
-        let profile = page.find(And(Name("div"),Class("profile")));
+
+        self.doc_get_profile(&page)
+    }
+
+    pub fn doc_get_profile(&mut self, doc: &Document) -> TabunResult<UserInfo> {
+        let profile = doc.find(And(Name("div"),Class("profile")));
 
         let username = try_to_parse!(
                 profile.find(And(Name("h2"),Attr("itemprop","nickname"))).first()
@@ -673,14 +679,14 @@ impl<'a> TClient<'a> {
             el.text().parse::<f32>().ok()
         });
 
-        let about = try_to_parse!(page.find(And(Name("div"),Class("profile-info-about"))).first());
+        let about = try_to_parse!(doc.find(And(Name("div"),Class("profile-info-about"))).first());
 
         let userpic = try_to_parse!(about.find(Class("avatar")).find(Name("img")).first());
         let userpic = try_to_parse!(userpic.attr("src"));
 
         let description = try_to_parse!(about.find(And(Name("div"),Class("text"))).first()).inner_html();
 
-        let dotted = page.find(And(Name("ul"), Class("profile-dotted-list")));
+        let dotted = doc.find(And(Name("ul"), Class("profile-dotted-list")));
         let dotted = try_to_parse!(dotted.iter().last()).find(Name("li"));
 
         let mut other_info = HashMap::<String,String>::new();
@@ -714,7 +720,7 @@ impl<'a> TClient<'a> {
             member: member
         };
 
-        let nav = page.find(Class("nav-profile")).find(Name("li"));
+        let nav = doc.find(Class("nav-profile")).find(Name("li"));
 
         let (mut publications,mut favourites, mut friends) = (0,0,0);
 

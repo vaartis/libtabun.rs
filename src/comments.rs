@@ -22,6 +22,7 @@ extern crate regex;
 extern crate unescape;
 
 use super::*;
+use select::document::Document;
 use select::predicate::{And,Class,Name};
 
 use std::collections::HashMap;
@@ -38,9 +39,7 @@ impl<'a> TClient<'a> {
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.get_comments("/blog/lighthouse/157807.html");
     ///```
-    pub fn get_comments<'f, T: Into<Option<&'f str>>>(&mut self,url: T) -> TabunResult<HashMap<u32,Comment>> {
-        let mut ret = HashMap::new();
-
+    pub fn get_comments<'f, T: Into<Option<&'f str>>>(&mut self, url: T) -> TabunResult<HashMap<u32, Comment>> {
         let url = &(match url.into() {
             None    => "/comments".to_owned(),
             Some(x) => {
@@ -52,27 +51,49 @@ impl<'a> TClient<'a> {
             }
         });
 
-        let page = try!(self.get_document(url));
+        let doc = try!(self.get_document(url));
+        self.doc_get_comments(&doc, url.as_str())
+    }
 
-        let comments = page.find(And(Name("div"),Class("comments")));
+    ///Получить комменты из некоторого поста/сообщения
+    ///в виде HashMap ID-Коммент. Если ссылка указана как None,
+    ///то получает из `/comments/`. Строку url требуется передать для
+    ///комментов не из ленты, потому что в них не содержится информации о
+    ///самом посте; если сохранить post_id не слишком важно, url можно
+    ///не передавать.
+    ///```
+    pub fn doc_get_comments<'f, T: Into<Option<&'f str>>>(&mut self, doc: &Document, url: T) -> TabunResult<HashMap<u32, Comment>> {
+        let mut ret = HashMap::new();
 
-        let url_regex = Regex::new(r"(\d+).html$").unwrap();
+        let url = match url.into() {
+            Some(x) => Some(x.to_string()),
+            None => None,
+        };
+
+        let comments = doc.find(And(Name("div"),Class("comments")));
+
+        let post_url_regex = Regex::new(r"(\d+).html$").unwrap();
 
         for comm in comments.find(Class("comment")).iter() {
-            let post_id = try_to_parse!(if url == "/comments" {
-                hado!{
-                    c <- comm.find(Class("comment-path-topic")).first();
-                    capts <- url_regex.captures(c.attr("href").unwrap());
-                    at <- capts.at(1);
-                    at.parse::<u32>().ok()
-                }
-            } else {
-                hado!{
-                    cpts <- url_regex.captures(url);
-                    at <- cpts.at(1);
-                    at.parse::<u32>().ok()
-                }
-            });
+            let path_info = comm.find(Class("comment-path-topic")).first();
+            let href = match path_info {
+                Some(p) => Some(try_to_parse!(p.attr("href")).to_string()),
+                None => url.to_owned(),
+            };
+
+            let post_id = match href {
+                Some(x) => {
+                    if let Some(capts) = post_url_regex.captures(&x) {
+                        try_to_parse!(hado!{
+                            at <- capts.at(1);
+                            at.parse::<u32>().ok()
+                        })
+                    } else {
+                        0
+                    }
+                },
+                None => 0
+            };
 
             let id = try_to_parse!(match comm.find(And(Name("li"),Class("vote"))).first() {
                 Some(x) => hado!{
@@ -97,7 +118,7 @@ impl<'a> TClient<'a> {
                     votes:      0,
                     parent:     0,
                     post_id:    post_id,
-                    deleted:    true
+                    deleted:    true,
                 });
                 continue
             }
@@ -134,7 +155,7 @@ impl<'a> TClient<'a> {
                 votes:      votes,
                 parent:     parent,
                 post_id:    post_id,
-                deleted:    false
+                deleted:    false,
             });
         }
         Ok(ret)
@@ -220,6 +241,22 @@ mod test {
                 assert_eq!(x[&3927613].post_id, 67052);
             },
             Err(x)  => panic!(x)
+        }
+    }
+
+    #[test]
+    fn test_doc_get_comments() {
+        let mut user = TClient::new(None, None).unwrap();
+        let doc = user.get_document("/comments/").unwrap();
+        match user.doc_get_comments(&doc, None) {
+            Ok(comms) => {
+                assert_eq!(comms.len(), 50);
+                for (id, ref comm) in &comms {
+                    assert_eq!(comm.id, *id);
+                    assert!(comm.post_id > 0);
+                }
+            },
+            Err(x)=> panic!(x)
         }
     }
 }
