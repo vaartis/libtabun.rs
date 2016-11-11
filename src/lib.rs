@@ -121,6 +121,13 @@ pub enum CommentType {
     Talk
 }
 
+///Тип данных для отправки multipart-запросом
+pub enum MultipartValue<'a> {
+    Text(&'a str),
+    File(&'a str),
+    Stream(&'a str, &'a mut Read),
+}
+
 //Структуры
 
 ///Клиент табуна
@@ -481,6 +488,8 @@ impl<'a> TClient<'a> {
         Ok(buf)
     }
 
+    /// Отправляет POST-запрос в формате multipart/form-data с данными,
+    /// указанными в HashMap.
     fn post_multipart(&mut self,url: &str, bd: HashMap<&str,&str>) -> Result<hyper::client::Response, TabunError> {
         let url = format!("{}{}", self.host, url); //TODO: Заменить на concat_idents! когда он стабилизируется
         let mut request = Request::new(
@@ -508,18 +517,77 @@ impl<'a> TClient<'a> {
         Ok(res)
     }
 
+    /// Аналогично методу `multipart`, но умеет также отправлять файлы.
+    /// (Ссылка на HashMap изменяемая только для чтения данных из
+    /// MultipartValue::Stream; в остальных случаях он не менется.)
+    fn post_multipart_with_files(&mut self, url: &str, bd: &mut HashMap<&str, MultipartValue>) -> Result<hyper::client::Response, TabunError> {
+        let url = format!("{}{}", self.host, url); //TODO: Заменить на concat_idents! когда он стабилизируется
+        let mut request = Request::new(
+            hyper::method::Method::Post,
+            hyper::Url::from_str(&url).unwrap()
+        ).unwrap();  // TODO: обработать нормально?
+        request.headers_mut().set(Cookie::from_cookie_jar(&self.cookies));
+
+        let mut req = Multipart::from_request(request).unwrap();
+
+        for (param, val) in bd {
+            match *val {
+                MultipartValue::Text(v) => {
+                    try!(req.write_text(param, v));
+                }
+                MultipartValue::File(v) => {
+                    try!(req.write_file(param, v));
+                }
+                MultipartValue::Stream(fname, ref mut v) => {
+                    try!(req.write_stream(param, &mut *v, Some(fname), None));
+                }
+            };
+        }
+
+        let res = try!(req.send());
+
+        if let Some(x) = res.headers.get::<SetCookie>() {
+            x.apply_to_cookie_jar(&mut self.cookies);
+        }
+
+        if res.status != hyper::Ok && res.status != hyper::status::StatusCode::MovedPermanently {
+            return Err(TabunError::from(res.status));
+        }
+
+        Ok(res)
+    }
+
     /// Отправляет ajax-запрос и возвращает распарсенный json-ответ (Value).
     /// Он гарантированно является json-объектом (то есть можно использовать
     /// `.as_object().unwrap()`, если нужно)
     fn ajax(&mut self, url: &str, bd: HashMap<&str, &str>) -> TabunResult<Value> {
+        let mut bd_ready: HashMap<&str, MultipartValue> = std::collections::HashMap::new();
+        for (k, v) in bd {
+            bd_ready.insert(k, MultipartValue::Text(v));
+        }
+        self.ajax_with_files(url, &mut bd_ready)
+    }
+
+    /// Аналогичен методу `ajax`, но может помимо строк принимать файлы.
+    fn ajax_with_files(&mut self, url: &str, bd: &mut HashMap<&str, MultipartValue>) -> TabunResult<Value> {
         let key = self.security_ls_key.to_owned();
 
-        let mut bd_ready = map!["security_ls_key" => key.as_str()];
-        for (k, v) in &bd {
-            bd_ready.insert(k, v);
+        let mut bd_ready = map!["security_ls_key" => MultipartValue::Text(key.as_str())];
+        for (k, v) in bd {
+            bd_ready.insert(k, match *v {
+                MultipartValue::Text(v) => {
+                    MultipartValue::Text(v)
+                },
+                MultipartValue::File(v) => {
+                    MultipartValue::File(v)
+                },
+                MultipartValue::Stream(fname, ref mut v) => {
+                    MultipartValue::Stream(fname, *v)
+                }
+            });
         }
 
-        let mut res = try!(self.post_multipart(url, bd_ready));
+        let mut res = try!(self.post_multipart_with_files(url, &mut bd_ready));
 
         let mut data = String::new();
         try!(res.read_to_string(&mut data));
@@ -581,6 +649,69 @@ impl<'a> TClient<'a> {
                 "title" => "",
                 "img_url" => url
             ]
+        ));
+
+        let text = get_json!(data, "/sText", as_str);
+        let text = match text {
+            Some(x) => x,
+            None => return Err(parse_error!("Server did not return sText"))
+        };
+
+        let doc = Document::from(text);
+        let img = try_to_parse!(doc.find(Name("img")).first());
+        Ok(try_to_parse!(img.attr("src")).to_string())
+    }
+
+    /// Загружает картинку из файла по указанному пути, попутно вычищая
+    /// табуновские бэкслэши из ответа
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    /// let link = user.upload_image_from_file("images/tabunyasha.png").unwrap();
+    /// ```
+    pub fn upload_image_from_file(&mut self, path: &str) -> TabunResult<String> {
+        let mut bd = map![
+            "title" => MultipartValue::Text(""),
+            "img_file" => MultipartValue::File(path)
+        ];
+
+        let data = try!(self.ajax_with_files(
+            "/ajax/upload/image",
+            &mut bd
+        ));
+
+        let text = get_json!(data, "/sText", as_str);
+        let text = match text {
+            Some(x) => x,
+            None => return Err(parse_error!("Server did not return sText"))
+        };
+
+        let doc = Document::from(text);
+        let img = try_to_parse!(doc.find(Name("img")).first());
+        Ok(try_to_parse!(img.attr("src")).to_string())
+    }
+
+    /// Загружает картинку из указанного потока, попутно вычищая
+    /// табуновские бэкслэши из ответа
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    /// let mut stream = std::fs::File::open("images/tabunyasha.png").unwrap();
+    /// let link = user.upload_image_from_stream("image.png", &mut stream).unwrap();
+    /// ```
+    pub fn upload_image_from_stream(&mut self, filename: &str, stream: &mut Read) -> TabunResult<String> {
+        let mut bd = map![
+            "title" => MultipartValue::Text(""),
+            "img_file" => MultipartValue::Stream(filename, stream)
+        ];
+
+        let data = try!(self.ajax_with_files(
+            "/ajax/upload/image",
+            &mut bd
         ));
 
         let text = get_json!(data, "/sText", as_str);
