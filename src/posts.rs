@@ -38,7 +38,7 @@ impl<'a> TClient<'a> {
     ///```no_run
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///let blog_id = user.get_blog_id("computers").unwrap();
-    ///user.add_post(blog_id,"Название поста","Текст поста",&vec!["тэг раз","тэг два"]);
+    ///let post_id = user.add_post(blog_id,"Название поста","Текст поста",&vec!["тэг раз","тэг два"]).unwrap();
     ///```
     pub fn add_post(&mut self, blog_id: u32, title: &str, body: &str, tags: &[&str]) -> TabunResult<u32> {
         let blog_id = blog_id.to_string();
@@ -56,6 +56,51 @@ impl<'a> TClient<'a> {
         ];
 
         let res = try!(self.post_multipart("/topic/add", &bd));
+
+        let r = str::from_utf8(&res.headers.get_raw("location").unwrap()[0]).unwrap();
+        parse_text_to_res!(regex => r"(\d+).html$", st => r, num => 1, typ => u32 )
+    }
+
+    ///Создаёт опрос в указанном блоге и возвращает его номер
+    ///
+    ///# Examples
+    ///```no_run
+    ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    ///let blog_id = user.get_blog_id("computers").unwrap();
+    ///let post_id = user.add_poll(
+    ///    blog_id, "Вопрос",
+    ///    &vec!["Ответ 1", "Ответ 2", "Ответ 3"],
+    ///    "Текст поста", &vec!["тэг раз", "тэг два"],
+    ///    false, true
+    ///).unwrap();
+    ///```
+    pub fn add_poll(&mut self, blog_id: u32, title: &str, choices: &[&str], body: &str, tags: &[&str], forbid_comment: bool, publish: bool) -> TabunResult<u32> {
+        let blog_id = blog_id.to_string();
+        let key = self.security_ls_key.to_owned();
+        let tags = tags.iter().fold(String::new(), |acc, x| format!("{},{}", acc, x));
+        let forbid_comment = if forbid_comment { "1" } else { "0" };
+
+        let mut bd = vec![
+            ("topic_type",            "question"),
+            ("blog_id",               &blog_id),
+            ("topic_title",           title),
+            ("topic_text",            body),
+            ("topic_tags",            &tags),
+            ("topic_forbid_comment",  forbid_comment),
+            ("security_ls_key",       &key)
+        ];
+
+        for choice in choices {
+            bd.push(("answer[]", choice));
+        }
+
+        if publish {
+            bd.push(("submit_topic_publish", "Опубликовать"));
+        } else {
+            bd.push(("submit_topic_save", "Сохранить в черновиках"));
+        }
+
+        let res = try!(self.post_multipart("/question/add", &bd));
 
         let r = str::from_utf8(&res.headers.get_raw("location").unwrap()[0]).unwrap();
         parse_text_to_res!(regex => r"(\d+).html$", st => r, num => 1, typ => u32 )
@@ -138,7 +183,7 @@ impl<'a> TClient<'a> {
         self.doc_get_editable_post(&doc)
     }
 
-    pub fn doc_get_editable_post(&mut self, doc: &Document) -> TabunResult<EditablePost> {
+    pub fn doc_get_editable_post(&self, doc: &Document) -> TabunResult<EditablePost> {
         let title = try_to_parse!(doc.find(Attr("id","topic_title")).first());
         let title = try_to_parse!(title.attr("value")).to_string();
 
@@ -153,6 +198,25 @@ impl<'a> TClient<'a> {
             body:   body,
             tags:   tags
         })
+    }
+
+    ///Получает EditablePost со страницы редактирования опроса
+    ///(на момент написания документации варианты ответа не получаются,
+    ///так как Табун всё равно не даёт их редактировать и нет смысла получать)
+    ///
+    ///# Examples
+    ///```no_run
+    ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    ///user.get_editable_poll(1111);
+    ///```
+    pub fn get_editable_poll(&mut self, post_id: u32) -> TabunResult<EditablePost> {
+        let doc = try!(self.get_document(&format!("/question/edit/{}",post_id)));
+        self.doc_get_editable_poll(&doc)
+    }
+
+    pub fn doc_get_editable_poll(&self, doc: &Document) -> TabunResult<EditablePost> {
+        // TODO: всё-таки получить варианты ответов
+        self.doc_get_editable_post(doc)
     }
 
     ///Получает пост, блог можно опустить (передать `None`), но лучше так не делать,
@@ -242,6 +306,46 @@ impl<'a> TClient<'a> {
         ];
 
         let res = try!(self.post_multipart(&format!("/topic/edit/{}",post_id), &bd));
+
+        let r = str::from_utf8(&res.headers.get_raw("location").unwrap()[0]).unwrap();
+
+        parse_text_to_res!(regex => r"(\d+).html$", st => r, num => 1, typ => u32)
+
+    }
+
+    ///Редактирует опрос, возвращает его ID. Редактирование заголовка и
+    ///вариантов ответа не реализованы, так как Табун всё равно не даёт их
+    ///редактировать.
+    ///
+    ///# Examples
+    ///```no_run
+    ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    ///let blog_id = user.get_blog_id("computers").unwrap();
+    ///user.edit_poll(157198, blog_id, "Новый текст", &vec!["тэг"], false, true);
+    ///```
+    pub fn edit_poll(&mut self, post_id: u32, blog_id: u32, body: &str, tags: &[&str], forbid_comment: bool, publish: bool) -> TabunResult<u32> {
+        let blog_id = blog_id.to_string();
+        let key = self.security_ls_key.to_owned();
+        let forbid_comment = if forbid_comment { "1" } else { "0" };
+        let tags = tags.iter().fold(String::new(), |acc, x| format!("{},{}", acc, x));
+
+        let mut bd = vec![
+            ("topic_type",            "question"),
+            ("blog_id",               &blog_id),
+            ("topic_title",           ""),
+            ("topic_text",            body),
+            ("topic_tags",            &tags),
+            ("security_ls_key",       &key),
+            ("topic_forbid_comment",  &forbid_comment)
+        ];
+
+        if publish {
+            bd.push(("submit_topic_publish", "Опубликовать"));
+        } else {
+            bd.push(("submit_topic_save", "Сохранить в черновиках"));
+        }
+
+        let res = try!(self.post_multipart(&format!("/question/edit/{}",post_id), &bd));
 
         let r = str::from_utf8(&res.headers.get_raw("location").unwrap()[0]).unwrap();
 
