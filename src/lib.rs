@@ -489,8 +489,8 @@ impl<'a> TClient<'a> {
     }
 
     /// Отправляет POST-запрос в формате multipart/form-data с данными,
-    /// указанными в HashMap.
-    fn post_multipart(&mut self,url: &str, bd: HashMap<&str,&str>) -> Result<hyper::client::Response, TabunError> {
+    /// указанными в Vec.
+    fn post_multipart(&mut self,url: &str, bd: &[(&str, &str)]) -> Result<hyper::client::Response, TabunError> {
         let url = format!("{}{}", self.host, url); //TODO: Заменить на concat_idents! когда он стабилизируется
         let mut request = Request::new(
             hyper::method::Method::Post,
@@ -500,7 +500,7 @@ impl<'a> TClient<'a> {
 
         let mut req = Multipart::from_request(request).unwrap();
 
-        for (param,val) in bd {
+        for &(param, val) in bd {
             let _ = req.write_text(param,val);
         }
 
@@ -518,9 +518,9 @@ impl<'a> TClient<'a> {
     }
 
     /// Аналогично методу `multipart`, но умеет также отправлять файлы.
-    /// (Ссылка на HashMap изменяемая только для чтения данных из
+    /// (Ссылка на Vec изменяемая только для чтения данных из
     /// MultipartValue::Stream; в остальных случаях он не менется.)
-    fn post_multipart_with_files(&mut self, url: &str, bd: &mut HashMap<&str, MultipartValue>) -> Result<hyper::client::Response, TabunError> {
+    fn post_multipart_with_files(&mut self, url: &str, bd: &mut [(&str, MultipartValue)]) -> Result<hyper::client::Response, TabunError> {
         let url = format!("{}{}", self.host, url); //TODO: Заменить на concat_idents! когда он стабилизируется
         let mut request = Request::new(
             hyper::method::Method::Post,
@@ -530,7 +530,7 @@ impl<'a> TClient<'a> {
 
         let mut req = Multipart::from_request(request).unwrap();
 
-        for (param, val) in bd {
+        for &mut (param, ref mut val) in bd {
             match *val {
                 MultipartValue::Text(v) => {
                     try!(req.write_text(param, v));
@@ -560,21 +560,22 @@ impl<'a> TClient<'a> {
     /// Отправляет ajax-запрос и возвращает распарсенный json-ответ (Value).
     /// Он гарантированно является json-объектом (то есть можно использовать
     /// `.as_object().unwrap()`, если нужно)
-    fn ajax(&mut self, url: &str, bd: HashMap<&str, &str>) -> TabunResult<Value> {
-        let mut bd_ready: HashMap<&str, MultipartValue> = std::collections::HashMap::new();
-        for (k, v) in bd {
-            bd_ready.insert(k, MultipartValue::Text(v));
+    fn ajax(&mut self, url: &str, bd: &[(&str, &str)]) -> TabunResult<Value> {
+        let mut bd_ready: Vec<(&str, MultipartValue)> = Vec::with_capacity(bd.len());
+        for &(k, v) in bd {
+            bd_ready.push((k, MultipartValue::Text(v)));
         }
         self.ajax_with_files(url, &mut bd_ready)
     }
 
     /// Аналогичен методу `ajax`, но может помимо строк принимать файлы.
-    fn ajax_with_files(&mut self, url: &str, bd: &mut HashMap<&str, MultipartValue>) -> TabunResult<Value> {
+    fn ajax_with_files(&mut self, url: &str, bd: &mut [(&str, MultipartValue)]) -> TabunResult<Value> {
         let key = self.security_ls_key.to_owned();
 
-        let mut bd_ready = map!["security_ls_key" => MultipartValue::Text(key.as_str())];
-        for (k, v) in bd {
-            bd_ready.insert(k, match *v {
+        let mut bd_ready: Vec<(&str, MultipartValue)> = Vec::with_capacity(bd.len() + 1);
+        bd_ready.push(("security_ls_key", MultipartValue::Text(key.as_str())));
+        for &mut (k, ref mut v) in bd {
+            bd_ready.push((k, match *v {
                 MultipartValue::Text(v) => {
                     MultipartValue::Text(v)
                 },
@@ -584,7 +585,7 @@ impl<'a> TClient<'a> {
                 MultipartValue::Stream(fname, ref mut v) => {
                     MultipartValue::Stream(fname, *v)
                 }
-            });
+            }));
         }
 
         let mut res = try!(self.post_multipart_with_files(url, &mut bd_ready));
@@ -629,11 +630,11 @@ impl<'a> TClient<'a> {
         let host = self.host.to_owned();
         try!(self.ajax(
             "/login/ajax-login",
-            map![
-                "login" => login,
-                "password" => pass,
-                "return-path" => &host,
-                "remember" => "on"
+            &vec![
+                ("login", login),
+                ("password", pass),
+                ("return-path", &host),
+                ("remember", "on")
             ]
         ));
 
@@ -645,9 +646,9 @@ impl<'a> TClient<'a> {
     pub fn upload_image_from_url(&mut self, url: &str) -> TabunResult<String> {
         let data = try!(self.ajax(
             "/ajax/upload/image",
-            map![
-                "title" => "",
-                "img_url" => url
+            &vec![
+                ("title", ""),
+                ("img_url", url)
             ]
         ));
 
@@ -672,9 +673,9 @@ impl<'a> TClient<'a> {
     /// let link = user.upload_image_from_file("images/tabunyasha.png").unwrap();
     /// ```
     pub fn upload_image_from_file(&mut self, path: &str) -> TabunResult<String> {
-        let mut bd = map![
-            "title" => MultipartValue::Text(""),
-            "img_file" => MultipartValue::File(path)
+        let mut bd = vec![
+            ("title", MultipartValue::Text("")),
+            ("img_file", MultipartValue::File(path))
         ];
 
         let data = try!(self.ajax_with_files(
@@ -704,9 +705,9 @@ impl<'a> TClient<'a> {
     /// let link = user.upload_image_from_stream("image.png", &mut stream).unwrap();
     /// ```
     pub fn upload_image_from_stream(&mut self, filename: &str, stream: &mut Read) -> TabunResult<String> {
-        let mut bd = map![
-            "title" => MultipartValue::Text(""),
-            "img_file" => MultipartValue::Stream(filename, stream)
+        let mut bd = vec![
+            ("title", MultipartValue::Text("")),
+            ("img_file", MultipartValue::Stream(filename, stream))
         ];
 
         let data = try!(self.ajax_with_files(
@@ -895,14 +896,14 @@ impl<'a> TClient<'a> {
     fn favourite(&mut self, id: u32, typ: bool, fn_typ: bool) -> TabunResult<u32> {
         let id = id.to_string();
 
-        let body = map![
-            if fn_typ { "idComment"} else { "idTopic" } => id.as_str(),
-            "type" => &(if typ { "1" } else { "0" })
+        let body = vec![
+            (if fn_typ { "idComment"} else { "idTopic" }, id.as_str()),
+            ("type", &(if typ { "1" } else { "0" }))
         ];
 
         let data = try!(self.ajax(
             &format!("/ajax/favourite/{}/", if fn_typ { "comment" } else { "topic" }),
-            body
+            &body
         ));
 
         match get_json!(data, "/iCount", as_u64) {

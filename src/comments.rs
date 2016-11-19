@@ -178,10 +178,10 @@ impl<'a> TClient<'a> {
                 "/{}/ajaxaddcomment/",
                 match typ { CommentType::Post => "blog", CommentType::Talk => "talk" }
             ),
-            map![
-                "comment_text" => body,
-                "cmt_target_id" => s_post_id.as_str(),
-                "reply" => s_reply.as_str()
+            &vec![
+                ("comment_text", body),
+                ("cmt_target_id", s_post_id.as_str()),
+                ("reply", s_reply.as_str())
             ]
         ));
 
@@ -203,14 +203,14 @@ impl<'a> TClient<'a> {
 
         let s_post_id = post_id.to_string();
 
-        let body = map![
-            "target_type"       =>  "topic_new_comment",
-            "target_id"         =>  s_post_id.as_str(),
-            "value"             =>  subscribed,
-            "mail"              =>  ""
+        let body = vec![
+            ("target_type",  "topic_new_comment"),
+            ("target_id",    s_post_id.as_str()),
+            ("value",        subscribed),
+            ("mail",         "")
         ];
 
-        try!(self.ajax("/subscribe/ajax-subscribe-toggle", body));
+        try!(self.ajax("/subscribe/ajax-subscribe-toggle", &body));
         Ok(())
     }
 

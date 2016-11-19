@@ -105,15 +105,15 @@ impl<'a> TClient<'a> {
         let users = users.iter().fold(String::new(),|acc, x| format!("{},{}",acc, x));
         let key = self.security_ls_key.to_owned();
 
-        let fields = map![
-            "submit_talk_add" => "Отправить",
-            "security_ls_key" => &key,
-            "talk_users" => &users,
-            "talk_title" => &title,
-            "talk_text" => &body
+        let fields = vec![
+            ("submit_talk_add", "Отправить"),
+            ("security_ls_key", &key),
+            ("talk_users", &users),
+            ("talk_title", &title),
+            ("talk_text", &body)
         ];
 
-        let res = try!(self.post_multipart("/talk/add",fields));
+        let res = try!(self.post_multipart("/talk/add", &fields));
 
         if let Some(x) = res.headers.get_raw("location") {
             parse_text_to_res!(regex => r"read/(\d+)/$", st => str::from_utf8(&x[0]).unwrap(), num => 1, typ => u32)
