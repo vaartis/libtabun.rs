@@ -26,6 +26,31 @@
 //! разнесён по нескольким файлам.
 //!
 //! Большинство функций ~~нагло украдены~~ портированы с [`tabun_api`](https://github.com/andreymal/tabun_api)
+//!
+//! # Examples
+//!
+//! ```no_run
+//! let mut user = libtabun::TClient::new("username", "password").unwrap();
+//! let posts = user.get_posts("fanart", 1).unwrap();
+//! for post in &posts {
+//!     println!("{} - {}", post.id, post.title);
+//! }
+//! ```
+//!
+//! Можно использовать [`TClientBuilder`](struct.TClientBuilder.html) для
+//! большей кастомизации:
+//!
+//! ```no_run
+//! let mut user = libtabun::TClientBuilder::new()
+//!     .session_id("t15sacuhntote9h99190vtne1m")
+//!     .key("329tZL5OoJRvw6SxcmLpfMFXCt7mfjcU")
+//!     .host("http://tabun-dev.localhost")
+//!     .finalize().unwrap();
+//! println!(
+//!     "Logged in as {}",
+//!     if user.name.is_empty() { "[none]" } else { user.name.as_str() }
+//! );
+//! ```
 
 extern crate hyper;
 extern crate select;
@@ -45,7 +70,7 @@ use std::collections::HashMap;
 
 use hyper::client::Client;
 use hyper::client::request::Request;
-use hyper::header::{CookieJar,SetCookie,Cookie};
+use hyper::header::{CookiePair,CookieJar,SetCookie,Cookie};
 use hyper::status::StatusCode;
 
 use multipart::client::Multipart;
@@ -57,7 +82,7 @@ use select::predicate::{Class, Name, And, Attr};
 
 use serde_json::Value;
 
-#[macro_use] mod utils;
+#[macro_use] pub mod utils;
 mod comments;
 mod posts;
 mod talks;
@@ -96,14 +121,34 @@ pub enum CommentType {
     Talk
 }
 
+///Тип данных для отправки multipart-запросом
+pub enum MultipartValue<'a> {
+    Text(&'a str),
+    File(&'a str),
+    Stream(&'a str, &'a mut Read),
+}
+
 //Структуры
 
 ///Клиент табуна
 pub struct TClient<'a> {
     pub name:               String,
     pub security_ls_key:    String,
+    pub host:               String,
     client:                 Client,
     cookies:                CookieJar<'a>,
+}
+
+///Строитель клиента табуна
+pub struct TClientBuilder {
+    login:            String,
+    pass:             String,
+    session_id:       String,
+    security_ls_key:  String,
+    key:              String,
+    client:           Client,
+    host:             String,
+    session_id_name:  String
 }
 
 #[derive(Debug,Clone)]
@@ -115,7 +160,7 @@ pub struct Comment {
     pub votes:      i32,
     pub parent:     u32,
     pub post_id:    u32,
-    pub deleted:    bool
+    pub deleted:    bool,
 }
 
 #[derive(Debug,Clone)]
@@ -250,6 +295,91 @@ pub const HOST_URL: &'static str = "https://tabun.everypony.ru";
 
 pub type TabunResult<T> = Result<T,TabunError>;
 
+impl TClientBuilder {
+    pub fn new() -> TClientBuilder {
+        TClientBuilder {
+            login:            String::new(),
+            pass:             String::new(),
+            session_id:       String::new(),
+            security_ls_key:  String::new(),
+            key:              String::new(),
+            client:           Client::new(),
+            host:             HOST_URL.to_string(),
+            session_id_name:  String::from("TABUNSESSIONID"),
+        }
+    }
+
+    pub fn login(mut self, login: &str) -> TClientBuilder {
+        self.login = login.to_string();
+        self
+    }
+
+    pub fn pass(mut self, pass: &str) -> TClientBuilder {
+        self.pass = pass.to_string();
+        self
+    }
+
+    pub fn session_id(mut self, session_id: &str) -> TClientBuilder {
+        self.session_id = session_id.to_string();
+        self
+    }
+
+    pub fn security_ls_key(mut self, security_ls_key: &str) -> TClientBuilder {
+        self.security_ls_key = security_ls_key.to_string();
+        self
+    }
+
+    pub fn key(mut self, key: &str) -> TClientBuilder {
+        self.key = key.to_string();
+        self
+    }
+
+    pub fn host(mut self, host: &str) -> TClientBuilder {
+        self.host = host.to_string();
+        self
+    }
+
+    pub fn session_id_name(mut self, session_id_name: &str) -> TClientBuilder {
+        self.session_id_name = session_id_name.to_string();
+        self
+    }
+
+    pub fn client(mut self, client: Client) -> TClientBuilder {
+        self.client = client;
+        self
+    }
+
+    pub fn finalize<'a>(self) -> TabunResult<TClient<'a>> {
+        let mut user = TClient{
+            name:               String::new(),
+            security_ls_key:    self.security_ls_key.clone(),
+            client:             self.client,
+            cookies:            CookieJar::new(format!("{:?}",std::time::SystemTime::now()).as_bytes()),
+            host:               self.host,
+        };
+
+        // Проставляем печеньки какие есть
+        if !self.session_id.is_empty() {
+            user.cookies.add(CookiePair::new(self.session_id_name, self.session_id));
+        }
+
+        if !self.key.is_empty() {
+            user.cookies.add(CookiePair::new("key".to_string(), self.key));
+        }
+
+        // Качаем главную страницу, попутно это проставит отсутствующие печеньки
+        let data = try!(user.get("/"));
+        // Парсим информацию о текущем пользователе
+        user.update_userinfo(&data);
+
+        // Если текущего пользователя нет, но у нас есть логин и пароль, то логинимся
+        if user.name.is_empty() && !self.login.is_empty() && !self.pass.is_empty() {
+            try!(user.login(&self.login, &self.pass));
+        }
+        Ok(user)
+    }
+}
+
 impl<'a> TClient<'a> {
 
     ///Входит на табунчик и сохраняет LIVESTREET_SECURITY_KEY,
@@ -265,16 +395,11 @@ impl<'a> TClient<'a> {
             security_ls_key:    String::new(),
             client:             Client::new(),
             cookies:            CookieJar::new(format!("{:?}",std::time::SystemTime::now()).as_bytes()),
+            host:               String::from(HOST_URL),
         };
 
-        let ls_key_regex = Regex::new(r"LIVESTREET_SECURITY_KEY = '(.+)'").unwrap();
-
-        let page = try!(user.get(&"/login".to_owned()));
-        let page = try_to_parse!(
-            page.find(Name("html")).first()
-        ).html();
-
-        user.security_ls_key = ls_key_regex.captures(&page).unwrap().at(1).unwrap().to_owned();
+        let data = try!(user.get("/"));
+        user.update_userinfo(&data);
 
         if let (Some(login), Some(pass)) = (login.into(), pass.into()) {
             try!(user.login(login, pass));
@@ -283,33 +408,90 @@ impl<'a> TClient<'a> {
         Ok(user)
     }
 
+    /// Парсит код страницы, переданной в параметре, и обновляет:
+    /// - security_ls_key
+    /// - имя пользователя
+    fn update_userinfo(&mut self, data: &Vec<u8>) {
+        let str_data = String::from_utf8_lossy(data).into_owned();
+        let page = Document::from(str_data.as_str());
+
+        // Ищем security_ls_key
+        let ls_key_regex = Regex::new(r"LIVESTREET_SECURITY_KEY = '(.+)'").unwrap();
+        match ls_key_regex.captures(&str_data) {
+            Some(x) => {
+                self.security_ls_key = x.at(1).unwrap().to_owned();
+            },
+            None => {}
+        };
+
+        // Ищем панельку с информацией о текущем пользователе
+        let dropdown_user = match page.find(Attr("id", "dropdown-user")).first() {
+            None => {
+                // Не нашли — значит скорее всего не залогинены
+                self.name = String::new();
+                return;
+            },
+            Some(x) => x,
+        };
+
+        self.name = match dropdown_user.find(Class("username")).first() {
+            Some(x) => x.text(),
+            None => String::new(),
+        };
+    }
+
     ///Заметка себе: создаёт промежуточный объект запроса, сразу выставляя печеньки,
     ///на случай если надо что-то поменять (как в delete_post)
     fn create_middle_req(&mut self, url: &str) -> hyper::client::RequestBuilder {
-        let full_url = format!("{}{}", HOST_URL, url); //TODO: Заменить на concat_idents! когда он стабилизируется
+        let full_url = format!("{}{}", self.host, url); //TODO: Заменить на concat_idents! когда он стабилизируется
         self.client.get(&full_url)
             .header(Cookie::from_cookie_jar(&self.cookies))
     }
 
-    fn get(&mut self,url: &str) -> Result<Document, TabunError> {
+    /// Загружает данные по ссылке, декодирует как UTF-8 и возвращает строку.
+    /// Заменяет некорректные UTF-8 последовательности на символ «�».
+    pub fn get_string(&mut self, url: &str) -> TabunResult<String> {
+        Ok(String::from_utf8_lossy(
+            &try!(self.get(url))
+        ).into_owned())
+    }
+
+    /// Загружает данные по ссылке, декодирует как UTF-8, парсит HTML и
+    /// возвращает `select::document::Document`. Может быть полезно, если из
+    /// одной и той же страницы вам нужно вытащить несколько разных данных:
+    /// результат этого метода можно скормить в методы с префиксом `doc_` и
+    /// таким образом собрать все нужные данные, уложившись в один HTTP-запрос.
+    /// Заменяет некорректные UTF-8 последовательности на символ «�».
+    pub fn get_document(&mut self, url: &str) -> TabunResult<Document> {
+        let buf = String::from_utf8_lossy(
+            &try!(self.get(url))
+        ).into_owned();
+
+        Ok(Document::from(&*buf))
+    }
+
+    /// Загружает данные по ссылке и возвращает их как есть.
+    pub fn get(&mut self, url: &str) -> TabunResult<Vec<u8>> {
         let mut res = try!(self.create_middle_req(url).send());
 
         if res.status != hyper::Ok {
             return Err(TabunError::from(res.status));
         }
 
-        let mut buf = String::new();
-        try!(res.read_to_string(&mut buf));
+        let mut buf: Vec<u8> = Vec::new();
+        try!(res.read_to_end(&mut buf));
 
         if let Some(x) = res.headers.get::<SetCookie>() {
             x.apply_to_cookie_jar(&mut self.cookies);
         }
 
-        Ok(Document::from(&*buf))
+        Ok(buf)
     }
 
-    fn multipart(&mut self,url: &str, bd: HashMap<&str,&str>) -> Result<hyper::client::Response, TabunError> {
-        let url = format!("{}{}", HOST_URL, url); //TODO: Заменить на concat_idents! когда он стабилизируется
+    /// Отправляет POST-запрос в формате multipart/form-data с данными,
+    /// указанными в Vec.
+    fn post_multipart(&mut self,url: &str, bd: &[(&str, &str)]) -> Result<hyper::client::Response, TabunError> {
+        let url = format!("{}{}", self.host, url); //TODO: Заменить на concat_idents! когда он стабилизируется
         let mut request = Request::new(
             hyper::method::Method::Post,
             hyper::Url::from_str(&url).unwrap()
@@ -318,8 +500,48 @@ impl<'a> TClient<'a> {
 
         let mut req = Multipart::from_request(request).unwrap();
 
-        for (param,val) in bd {
+        for &(param, val) in bd {
             let _ = req.write_text(param,val);
+        }
+
+        let res = try!(req.send());
+
+        if let Some(x) = res.headers.get::<SetCookie>() {
+            x.apply_to_cookie_jar(&mut self.cookies);
+        }
+
+        if res.status != hyper::Ok && res.status != hyper::status::StatusCode::MovedPermanently {
+            return Err(TabunError::from(res.status));
+        }
+
+        Ok(res)
+    }
+
+    /// Аналогично методу `multipart`, но умеет также отправлять файлы.
+    /// (Ссылка на Vec изменяемая только для чтения данных из
+    /// MultipartValue::Stream; в остальных случаях он не менется.)
+    fn post_multipart_with_files(&mut self, url: &str, bd: &mut [(&str, MultipartValue)]) -> Result<hyper::client::Response, TabunError> {
+        let url = format!("{}{}", self.host, url); //TODO: Заменить на concat_idents! когда он стабилизируется
+        let mut request = Request::new(
+            hyper::method::Method::Post,
+            hyper::Url::from_str(&url).unwrap()
+        ).unwrap();  // TODO: обработать нормально?
+        request.headers_mut().set(Cookie::from_cookie_jar(&self.cookies));
+
+        let mut req = Multipart::from_request(request).unwrap();
+
+        for &mut (param, ref mut val) in bd {
+            match *val {
+                MultipartValue::Text(v) => {
+                    try!(req.write_text(param, v));
+                }
+                MultipartValue::File(v) => {
+                    try!(req.write_file(param, v));
+                }
+                MultipartValue::Stream(fname, ref mut v) => {
+                    try!(req.write_stream(param, &mut *v, Some(fname), None));
+                }
+            };
         }
 
         let res = try!(req.send());
@@ -338,15 +560,35 @@ impl<'a> TClient<'a> {
     /// Отправляет ajax-запрос и возвращает распарсенный json-ответ (Value).
     /// Он гарантированно является json-объектом (то есть можно использовать
     /// `.as_object().unwrap()`, если нужно)
-    fn ajax(&mut self, url: &str, bd: HashMap<&str, &str>) -> TabunResult<Value> {
+    fn ajax(&mut self, url: &str, bd: &[(&str, &str)]) -> TabunResult<Value> {
+        let mut bd_ready: Vec<(&str, MultipartValue)> = Vec::with_capacity(bd.len());
+        for &(k, v) in bd {
+            bd_ready.push((k, MultipartValue::Text(v)));
+        }
+        self.ajax_with_files(url, &mut bd_ready)
+    }
+
+    /// Аналогичен методу `ajax`, но может помимо строк принимать файлы.
+    fn ajax_with_files(&mut self, url: &str, bd: &mut [(&str, MultipartValue)]) -> TabunResult<Value> {
         let key = self.security_ls_key.to_owned();
 
-        let mut bd_ready = map!["security_ls_key" => key.as_str()];
-        for (k, v) in &bd {
-            bd_ready.insert(k, v);
+        let mut bd_ready: Vec<(&str, MultipartValue)> = Vec::with_capacity(bd.len() + 1);
+        bd_ready.push(("security_ls_key", MultipartValue::Text(key.as_str())));
+        for &mut (k, ref mut v) in bd {
+            bd_ready.push((k, match *v {
+                MultipartValue::Text(v) => {
+                    MultipartValue::Text(v)
+                },
+                MultipartValue::File(v) => {
+                    MultipartValue::File(v)
+                },
+                MultipartValue::Stream(fname, ref mut v) => {
+                    MultipartValue::Stream(fname, *v)
+                }
+            }));
         }
 
-        let mut res = try!(self.multipart(url, bd_ready));
+        let mut res = try!(self.post_multipart_with_files(url, &mut bd_ready));
 
         let mut data = String::new();
         try!(res.read_to_string(&mut data));
@@ -385,21 +627,18 @@ impl<'a> TClient<'a> {
 
     ///Логинится с указанными именем пользователя и паролем
     pub fn login(&mut self, login: &str, pass: &str) -> TabunResult<()> {
+        let host = self.host.to_owned();
         try!(self.ajax(
             "/login/ajax-login",
-            map![
-                "login" => login,
-                "password" => pass,
-                "return-path" => HOST_URL,
-                "remember" => "on"
+            &vec![
+                ("login", login),
+                ("password", pass),
+                ("return-path", &host),
+                ("remember", "on")
             ]
         ));
 
-        let page = try!(self.get(&"/".to_owned()));
-        self.name = try_to_parse!(
-            page.find(Class("username")).first()
-        ).text();
-
+        self.name = String::from(login);
         Ok(())
     }
 
@@ -407,10 +646,73 @@ impl<'a> TClient<'a> {
     pub fn upload_image_from_url(&mut self, url: &str) -> TabunResult<String> {
         let data = try!(self.ajax(
             "/ajax/upload/image",
-            map![
-                "title" => "",
-                "img_url" => url
+            &vec![
+                ("title", ""),
+                ("img_url", url)
             ]
+        ));
+
+        let text = get_json!(data, "/sText", as_str);
+        let text = match text {
+            Some(x) => x,
+            None => return Err(parse_error!("Server did not return sText"))
+        };
+
+        let doc = Document::from(text);
+        let img = try_to_parse!(doc.find(Name("img")).first());
+        Ok(try_to_parse!(img.attr("src")).to_string())
+    }
+
+    /// Загружает картинку из файла по указанному пути, попутно вычищая
+    /// табуновские бэкслэши из ответа
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    /// let link = user.upload_image_from_file("images/tabunyasha.png").unwrap();
+    /// ```
+    pub fn upload_image_from_file(&mut self, path: &str) -> TabunResult<String> {
+        let mut bd = vec![
+            ("title", MultipartValue::Text("")),
+            ("img_file", MultipartValue::File(path))
+        ];
+
+        let data = try!(self.ajax_with_files(
+            "/ajax/upload/image",
+            &mut bd
+        ));
+
+        let text = get_json!(data, "/sText", as_str);
+        let text = match text {
+            Some(x) => x,
+            None => return Err(parse_error!("Server did not return sText"))
+        };
+
+        let doc = Document::from(text);
+        let img = try_to_parse!(doc.find(Name("img")).first());
+        Ok(try_to_parse!(img.attr("src")).to_string())
+    }
+
+    /// Загружает картинку из указанного потока, попутно вычищая
+    /// табуновские бэкслэши из ответа
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    /// let mut stream = std::fs::File::open("images/tabunyasha.png").unwrap();
+    /// let link = user.upload_image_from_stream("image.png", &mut stream).unwrap();
+    /// ```
+    pub fn upload_image_from_stream(&mut self, filename: &str, stream: &mut Read) -> TabunResult<String> {
+        let mut bd = vec![
+            ("title", MultipartValue::Text("")),
+            ("img_file", MultipartValue::Stream(filename, stream))
+        ];
+
+        let data = try!(self.ajax_with_files(
+            "/ajax/upload/image",
+            &mut bd
         ));
 
         let text = get_json!(data, "/sText", as_str);
@@ -429,15 +731,31 @@ impl<'a> TClient<'a> {
     ///# Examples
     ///```no_run
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
-    ///let blog_id = user.get_blog_id("lighthouse").unwrap();
-    ///assert_eq!(blog_id,15558);
+    ///let blog_id = user.get_blog_id("librehouse").unwrap();
+    ///assert_eq!(blog_id, 55698);
     ///```
     pub fn get_blog_id(&mut self,name: &str) -> TabunResult<u32> {
         let url = format!("/blog/{}", name);
-        let page = try!(self.get(&url));
+        let data = try!(self.get_string(&url));
 
+        let datapart = utils::find_substring(
+            &data,
+            "<div class=\"blog-top", true,
+            "<div class=\"blog-mini", false,
+            false
+        );
+        let pagepart = match datapart {
+            Some(x) => Document::from(&*x),
+            None => return Err(parse_error!("Cannot extract '<div class=\"blog-top\">'"))
+        };
+
+        self.doc_get_blog_id(&pagepart)
+    }
+
+    pub fn doc_get_blog_id(&self, doc: &Document) -> TabunResult<u32> {
         Ok(try_to_parse!(hado!{
-            el <- page.find(And(Name("div"),Class("vote-item"))).find(Name("span")).first();
+            blog_top <- doc.find(And(Name("div"), Class("blog-top"))).first();
+            el <- blog_top.find(And(Name("div"), Class("vote-item"))).find(Name("span")).first();
             id_s <- el.attr("id");
             num_s <- id_s.split('_').last();
             num_s.parse::<u32>().ok()
@@ -452,15 +770,21 @@ impl<'a> TClient<'a> {
     ///```no_run
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.get_profile("Orhideous");
+    ///```
     pub fn get_profile<'f, T: Into<Option<&'f str>>>(&mut self, name: T) -> TabunResult<UserInfo> {
         let name = match name.into() {
             Some(x) => x.to_owned(),
             None    => self.name.to_owned()
         };
 
-        let full_url = format!("/profile/{}", name);
-        let page = try!(self.get(&full_url));
-        let profile = page.find(And(Name("div"),Class("profile")));
+        let full_url = format!("/profile/{}/", name);
+        let page = try!(self.get_document(&full_url));
+
+        self.doc_get_profile(&page)
+    }
+
+    pub fn doc_get_profile(&mut self, doc: &Document) -> TabunResult<UserInfo> {
+        let profile = doc.find(And(Name("div"),Class("profile")));
 
         let username = try_to_parse!(
                 profile.find(And(Name("h2"),Attr("itemprop","nickname"))).first()
@@ -487,14 +811,14 @@ impl<'a> TClient<'a> {
             el.text().parse::<f32>().ok()
         });
 
-        let about = try_to_parse!(page.find(And(Name("div"),Class("profile-info-about"))).first());
+        let about = try_to_parse!(doc.find(And(Name("div"),Class("profile-info-about"))).first());
 
         let userpic = try_to_parse!(about.find(Class("avatar")).find(Name("img")).first());
         let userpic = try_to_parse!(userpic.attr("src"));
 
         let description = try_to_parse!(about.find(And(Name("div"),Class("text"))).first()).inner_html();
 
-        let dotted = page.find(And(Name("ul"), Class("profile-dotted-list")));
+        let dotted = doc.find(And(Name("ul"), Class("profile-dotted-list")));
         let dotted = try_to_parse!(dotted.iter().last()).find(Name("li"));
 
         let mut other_info = HashMap::<String,String>::new();
@@ -528,7 +852,7 @@ impl<'a> TClient<'a> {
             member: member
         };
 
-        let nav = page.find(Class("nav-profile")).find(Name("li"));
+        let nav = doc.find(Class("nav-profile")).find(Name("li"));
 
         let (mut publications,mut favourites, mut friends) = (0,0,0);
 
@@ -567,19 +891,113 @@ impl<'a> TClient<'a> {
         })
     }
 
+    /// Отправляет инвайт в блог с указанным номером указанным пользователям.
+    /// Возвращает HashMap, который содержит пары юзернейм-текст ошибки
+    /// в случае, если кому-то инвайт не отправился. Если всё хорошо, то
+    /// HashMap пустой.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    /// let blog_id = user.get_blog_id("librehouse").unwrap();
+    /// let failed_users = user.invite(blog_id, &["Orhideous"]).unwrap();
+    /// if failed_users.len() > 0 {
+    ///     for (user, reason) in &failed_users {
+    ///         println!("Cannot send invite to {}: {}", user, reason);
+    ///     }
+    /// } else {
+    ///     println!("All invites sent successfully!");
+    /// }
+    /// ```
+    pub fn invite(&mut self, blog_id: u32, users: &[&str]) -> TabunResult<HashMap<String, String>> {
+        let blog_id = blog_id.to_string();
+        let users = users.join(",");
+
+        let bd = vec![
+            ("users", users.as_str()),
+            ("idBlog", blog_id.as_str())
+        ];
+
+        let data = try!(self.ajax("/blog/ajaxaddbloginvite/", &bd));
+
+        let mut failed_users: HashMap<String, String> = HashMap::new();
+
+        if let Some(ausers) = get_json!(data, "/aUsers", as_array) {
+            for auser in ausers {
+                let is_error = get_json!(auser, "/bStateError", as_bool) == Some(true);
+                let login = get_json!(auser, "/sUserLogin", as_str);
+                let msg = get_json!(auser, "/sMsg", as_str).unwrap_or("");
+
+                if is_error && login != None {
+                    failed_users.insert(login.unwrap().to_string(), msg.to_string());
+                }
+            }
+        }
+
+        Ok(failed_users)
+    }
+
+    /// Повторяет отправку инвайта в блог с указанным номером указанному
+    /// пользователю.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    /// let blog_id = user.get_blog_id("librehouse").unwrap();
+    /// let orhideous = user.get_profile("Orhideous").unwrap();
+    /// user.resend_invite(blog_id, orhideous.id).unwrap();
+    /// ```
+    pub fn resend_invite(&mut self, blog_id: u32, user_id: u32) -> TabunResult<()> {
+        let blog_id = blog_id.to_string();
+        let user_id = user_id.to_string();
+
+        let bd = vec![
+            ("idUser", user_id.as_str()),
+            ("idBlog", blog_id.as_str())
+        ];
+
+        try!(self.ajax("/blog/ajaxrebloginvite/", &bd));
+        Ok(())
+    }
+
+    /// Удаляет инвайт в блог с указанным номером у указанного пользователя.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    /// let blog_id = user.get_blog_id("librehouse").unwrap();
+    /// let orhideous = user.get_profile("Orhideous").unwrap();
+    /// user.remove_invite(blog_id, orhideous.id).unwrap();
+    /// ```
+    pub fn remove_invite(&mut self, blog_id: u32, user_id: u32) -> TabunResult<()> {
+        let blog_id = blog_id.to_string();
+        let user_id = user_id.to_string();
+
+        let bd = vec![
+            ("idUser", user_id.as_str()),
+            ("idBlog", blog_id.as_str())
+        ];
+
+        try!(self.ajax("/blog/ajaxremovebloginvite/", &bd));
+        Ok(())
+    }
+
     ///Добавляет что-то в избранное, true - коммент, false - пост
     ///(внутренний метод для публичных favourite_post и favourite_comment)
     fn favourite(&mut self, id: u32, typ: bool, fn_typ: bool) -> TabunResult<u32> {
         let id = id.to_string();
 
-        let body = map![
-            if fn_typ { "idComment"} else { "idTopic" } => id.as_str(),
-            "type" => &(if typ { "1" } else { "0" })
+        let body = vec![
+            (if fn_typ { "idComment"} else { "idTopic" }, id.as_str()),
+            ("type", &(if typ { "1" } else { "0" }))
         ];
 
         let data = try!(self.ajax(
             &format!("/ajax/favourite/{}/", if fn_typ { "comment" } else { "topic" }),
-            body
+            &body
         ));
 
         match get_json!(data, "/iCount", as_u64) {

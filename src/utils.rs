@@ -127,3 +127,67 @@ macro_rules! get_json {
         }
     }
 }
+
+/// Возвращает подстроку, находящуюся между кусками `start` и `end`.
+///
+/// Параметры `with_start` и `with_end` указывают, включать ли сами куски
+/// `start` и `end` соответственно в результат.
+///
+/// При `extend` = `true` кусок `end` будет искаться с конца исходной строки,
+/// а не с начала.
+///
+///
+/// # Examples
+///
+/// ```
+/// let result = libtabun::utils::find_substring(
+///     "<a><b>c</b><b>d</b></a>",
+///     "<b>", false,
+///     "</b>", false,
+///     false
+/// );
+/// assert_eq!(result, Some("c".to_string()));
+/// ```
+///
+/// ```
+/// let result = libtabun::utils::find_substring(
+///     "<a><b>c</b><b>d</b></a>",
+///     "<b>", true,
+///     "</b>", true,
+///     true
+/// );
+/// assert_eq!(result, Some("<b>c</b><b>d</b>".to_string()));
+/// ```
+///
+/// ```
+/// let result = libtabun::utils::find_substring(
+///     "<a><b>c</b><b>d</b></a>",
+///     "<b>", true,
+///     "not-exist", true,
+///     true
+/// );
+/// assert_eq!(result, None);
+/// ```
+pub fn find_substring(s: &str, start: &str, with_start: bool, end: &str, with_end: bool, extend: bool) -> Option<String> {
+    let f1 = match s.find(start) {
+        None => return None,
+        Some(x) => x
+    };
+    let (_, s) = s.split_at(if with_start { f1 } else { f1 + start.len() });
+
+    let f2: usize;
+    if extend {
+        f2 = match s.rfind(end) {
+            None => return None,
+            Some(x) => x
+        };
+    } else {
+        f2 = match s.find(end) {
+            None => return None,
+            Some(x) => x
+        };
+    }
+
+    let (result, _) = s.split_at(if with_end { f2 + end.len() } else { f2 });
+    Some(result.to_string())
+}
