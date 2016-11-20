@@ -891,6 +891,100 @@ impl<'a> TClient<'a> {
         })
     }
 
+    /// Отправляет инвайт в блог с указанным номером указанным пользователям.
+    /// Возвращает HashMap, который содержит пары юзернейм-текст ошибки
+    /// в случае, если кому-то инвайт не отправился. Если всё хорошо, то
+    /// HashMap пустой.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    /// let blog_id = user.get_blog_id("librehouse").unwrap();
+    /// let failed_users = user.invite(blog_id, &["Orhideous"]).unwrap();
+    /// if failed_users.len() > 0 {
+    ///     for (user, reason) in &failed_users {
+    ///         println!("Cannot send invite to {}: {}", user, reason);
+    ///     }
+    /// } else {
+    ///     println!("All invites sent successfully!");
+    /// }
+    /// ```
+    pub fn invite(&mut self, blog_id: u32, users: &[&str]) -> TabunResult<HashMap<String, String>> {
+        let blog_id = blog_id.to_string();
+        let users = users.join(",");
+
+        let bd = vec![
+            ("users", users.as_str()),
+            ("idBlog", blog_id.as_str())
+        ];
+
+        let data = try!(self.ajax("/blog/ajaxaddbloginvite/", &bd));
+
+        let mut failed_users: HashMap<String, String> = HashMap::new();
+
+        if let Some(ausers) = get_json!(data, "/aUsers", as_array) {
+            for auser in ausers {
+                let is_error = get_json!(auser, "/bStateError", as_bool) == Some(true);
+                let login = get_json!(auser, "/sUserLogin", as_str);
+                let msg = get_json!(auser, "/sMsg", as_str).unwrap_or("");
+
+                if is_error && login != None {
+                    failed_users.insert(login.unwrap().to_string(), msg.to_string());
+                }
+            }
+        }
+
+        Ok(failed_users)
+    }
+
+    /// Повторяет отправку инвайта в блог с указанным номером указанному
+    /// пользователю.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    /// let blog_id = user.get_blog_id("librehouse").unwrap();
+    /// let orhideous = user.get_profile("Orhideous").unwrap();
+    /// user.resend_invite(blog_id, orhideous.id).unwrap();
+    /// ```
+    pub fn resend_invite(&mut self, blog_id: u32, user_id: u32) -> TabunResult<()> {
+        let blog_id = blog_id.to_string();
+        let user_id = user_id.to_string();
+
+        let bd = vec![
+            ("idUser", user_id.as_str()),
+            ("idBlog", blog_id.as_str())
+        ];
+
+        try!(self.ajax("/blog/ajaxrebloginvite/", &bd));
+        Ok(())
+    }
+
+    /// Удаляет инвайт в блог с указанным номером у указанного пользователя.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # let mut user = libtabun::TClient::new("логин","пароль").unwrap();
+    /// let blog_id = user.get_blog_id("librehouse").unwrap();
+    /// let orhideous = user.get_profile("Orhideous").unwrap();
+    /// user.remove_invite(blog_id, orhideous.id).unwrap();
+    /// ```
+    pub fn remove_invite(&mut self, blog_id: u32, user_id: u32) -> TabunResult<()> {
+        let blog_id = blog_id.to_string();
+        let user_id = user_id.to_string();
+
+        let bd = vec![
+            ("idUser", user_id.as_str()),
+            ("idBlog", blog_id.as_str())
+        ];
+
+        try!(self.ajax("/blog/ajaxremovebloginvite/", &bd));
+        Ok(())
+    }
+
     ///Добавляет что-то в избранное, true - коммент, false - пост
     ///(внутренний метод для публичных favourite_post и favourite_comment)
     fn favourite(&mut self, id: u32, typ: bool, fn_typ: bool) -> TabunResult<u32> {
