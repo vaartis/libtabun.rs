@@ -43,7 +43,7 @@ impl<'a> TClient<'a> {
     pub fn add_post(&mut self, blog_id: u32, title: &str, body: &str, tags: &[&str]) -> TabunResult<u32> {
         let blog_id = blog_id.to_string();
         let key = self.security_ls_key.to_owned();
-        let tags = tags.iter().fold(String::new(), |acc, x| format!("{},{}", acc, x));
+        let tags = tags.join(",");
 
         let bd = vec![
             ("topic_type",            "topic"),
@@ -77,7 +77,7 @@ impl<'a> TClient<'a> {
     pub fn add_poll(&mut self, blog_id: u32, title: &str, choices: &[&str], body: &str, tags: &[&str], forbid_comment: bool, publish: bool) -> TabunResult<u32> {
         let blog_id = blog_id.to_string();
         let key = self.security_ls_key.to_owned();
-        let tags = tags.iter().fold(String::new(), |acc, x| format!("{},{}", acc, x));
+        let tags = tags.join(",");
         let forbid_comment = if forbid_comment { "1" } else { "0" };
 
         let mut bd = vec![
@@ -292,7 +292,7 @@ impl<'a> TClient<'a> {
         let blog_id = blog_id.to_string();
         let key = self.security_ls_key.to_owned();
         let forbid_comment = if forbid_comment { "1" } else { "0" };
-        let tags = tags.iter().fold(String::new(), |acc, x| format!("{},{}", acc, x));
+        let tags = tags.join(",");
 
         let bd = vec![
             ("topic_type",            "topic"),
@@ -327,7 +327,7 @@ impl<'a> TClient<'a> {
         let blog_id = blog_id.to_string();
         let key = self.security_ls_key.to_owned();
         let forbid_comment = if forbid_comment { "1" } else { "0" };
-        let tags = tags.iter().fold(String::new(), |acc, x| format!("{},{}", acc, x));
+        let tags = tags.join(",");
 
         let mut bd = vec![
             ("topic_type",            "question"),

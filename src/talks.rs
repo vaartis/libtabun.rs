@@ -101,8 +101,7 @@ impl<'a> TClient<'a> {
     ///# let mut user = libtabun::TClient::new("логин","пароль").unwrap();
     ///user.add_talk(&vec!["человек1","человек2"], "Название", "Текст");
     pub fn add_talk(&mut self, users: &[&str], title: &str, body:&str ) -> Result<u32,TalkError> {
-
-        let users = users.iter().fold(String::new(),|acc, x| format!("{},{}",acc, x));
+        let users = users.join(",");
         let key = self.security_ls_key.to_owned();
 
         let fields = vec![
