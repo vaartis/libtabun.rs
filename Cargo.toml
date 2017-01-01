@@ -8,7 +8,7 @@ hyper          = "*"
 url            = "*"
 multipart      = {version = "*", default-features = false, features = ["client", "hyper"]}
 select         = "*"
-regex          = "*"
+regex          = "0.1.77"
 unescape       = "*"
 hado           = "*"
 serde_json     = "*"
