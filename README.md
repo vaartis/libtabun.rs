@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/TyanNN/libtabun.rs.svg?branch=master)](https://travis-ci.org/TyanNN/libtabun.rs)
+[![Build Status](https://travis-ci.org/vaartis/libtabun.rs.svg?branch=master)](https://travis-ci.org/vaartis/libtabun.rs)
 [![GPL Licence](https://badges.frapsoft.com/os/gpl/gpl.svg?v=103)](https://opensource.org/licenses/GPL-2.0/)  
 # libtabun.rs
 API для tabun.everypony.ru
